@@ -1,0 +1,455 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { Plus, ListTodo, LayoutGrid } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useTasks } from "@/lib/hooks/use-tasks";
+import type { TaskStatus, TaskPriority } from "@/lib/types";
+import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const BOARD_COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
+  { status: "todo", label: "To Do", color: "border-t-blue-500" },
+  { status: "in_progress", label: "In Progress", color: "border-t-amber-500" },
+  { status: "in_review", label: "In Review", color: "border-t-purple-500" },
+  { status: "done", label: "Done", color: "border-t-emerald-500" },
+];
+
+const priorityColors: Record<TaskPriority, string> = {
+  urgent: "bg-red-500/10 text-red-700 dark:text-red-400",
+  high: "bg-orange-500/10 text-orange-700 dark:text-orange-400",
+  medium: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400",
+  low: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  none: "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+};
+
+const priorityDots: Record<string, string> = {
+  urgent: "bg-red-500",
+  high: "bg-orange-500",
+  medium: "bg-yellow-500",
+  low: "bg-blue-500",
+  none: "bg-zinc-400",
+};
+
+const statusLabels: Record<string, string> = {
+  backlog: "Backlog",
+  todo: "To Do",
+  in_progress: "In Progress",
+  in_review: "In Review",
+  done: "Done",
+  cancelled: "Cancelled",
+};
+
+export default function TasksPage() {
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">(
+    "all"
+  );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const [formTitle, setFormTitle] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formStatus, setFormStatus] = useState<TaskStatus>("todo");
+  const [formPriority, setFormPriority] = useState<TaskPriority>("medium");
+  const [formDueDate, setFormDueDate] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+
+  const filters: Record<string, string | undefined> = {};
+  if (statusFilter !== "all") filters.status = statusFilter;
+  if (priorityFilter !== "all") filters.priority = priorityFilter;
+  if (searchQuery) filters.search = searchQuery;
+
+  const { tasks, isLoading, createTask, updateTask } = useTasks(
+    filters as any
+  );
+
+  const allTasks = tasks ?? [];
+
+  async function handleCreate() {
+    if (!formTitle.trim()) return;
+    setSubmitting(true);
+    try {
+      await createTask({
+        title: formTitle.trim(),
+        description: formDescription.trim() || undefined,
+        status: formStatus,
+        priority: formPriority,
+        dueDate: formDueDate || undefined,
+      });
+      setDialogOpen(false);
+      resetForm();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function resetForm() {
+    setFormTitle("");
+    setFormDescription("");
+    setFormStatus("todo");
+    setFormPriority("medium");
+    setFormDueDate("");
+  }
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, taskId: string) => {
+      setDraggedTaskId(taskId);
+      e.dataTransfer.effectAllowed = "move";
+    },
+    []
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent, targetStatus: TaskStatus) => {
+      e.preventDefault();
+      if (!draggedTaskId) return;
+      try {
+        await updateTask(draggedTaskId, { status: targetStatus });
+      } catch (err) {
+        console.error(err);
+      }
+      setDraggedTaskId(null);
+    },
+    [draggedTaskId, updateTask]
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Tasks"
+        description="Organize and track all your tasks"
+        actions={
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Task
+          </Button>
+        }
+      />
+
+      {/* Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Input
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Select
+          value={statusFilter}
+          onValueChange={(v) => setStatusFilter(v as TaskStatus | "all")}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="backlog">Backlog</SelectItem>
+            <SelectItem value="todo">To Do</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="in_review">In Review</SelectItem>
+            <SelectItem value="done">Done</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={priorityFilter}
+          onValueChange={(v) => setPriorityFilter(v as TaskPriority | "all")}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priorities</SelectItem>
+            <SelectItem value="urgent">Urgent</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+            <SelectItem value="none">None</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Tabs defaultValue="list">
+        <TabsList>
+          <TabsTrigger value="list" className="gap-1.5">
+            <ListTodo className="h-4 w-4" />
+            List
+          </TabsTrigger>
+          <TabsTrigger value="board" className="gap-1.5">
+            <LayoutGrid className="h-4 w-4" />
+            Board
+          </TabsTrigger>
+        </TabsList>
+
+        {/* List View */}
+        <TabsContent value="list" className="mt-4">
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : allTasks.length === 0 ? (
+            <EmptyState
+              icon={ListTodo}
+              title="No tasks found"
+              description="Create your first task to get started."
+              actionLabel="New Task"
+              onAction={() => setDialogOpen(true)}
+            />
+          ) : (
+            <div className="space-y-2">
+              {allTasks.map((task) => (
+                <a
+                  key={task.id}
+                  href={`/tasks/${task.id}`}
+                  className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/50"
+                >
+                  <div
+                    className={cn(
+                      "h-2.5 w-2.5 rounded-full shrink-0",
+                      priorityDots[task.priority] ?? "bg-zinc-400"
+                    )}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={cn(
+                        "text-sm font-medium truncate",
+                        task.status === "done" &&
+                          "line-through text-muted-foreground"
+                      )}
+                    >
+                      {task.title}
+                    </p>
+                    {task.dueDate && (
+                      <p className="text-xs text-muted-foreground">
+                        Due {new Date(task.dueDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "text-xs shrink-0",
+                      priorityColors[task.priority]
+                    )}
+                  >
+                    {task.priority}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {statusLabels[task.status] ?? task.status}
+                  </Badge>
+                </a>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Board View */}
+        <TabsContent value="board" className="mt-4">
+          {isLoading ? (
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-64" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
+              {BOARD_COLUMNS.map((col) => {
+                const columnTasks = allTasks.filter(
+                  (t) => t.status === col.status
+                );
+                return (
+                  <Card
+                    key={col.status}
+                    className={cn("border-t-2", col.color)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, col.status)}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm font-medium flex items-center justify-between">
+                        {col.label}
+                        <Badge variant="secondary" className="text-xs">
+                          {columnTasks.length}
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2 min-h-[100px]">
+                      {columnTasks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          Drop tasks here
+                        </p>
+                      ) : (
+                        columnTasks.map((task) => (
+                          <div
+                            key={task.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, task.id)}
+                            className={cn(
+                              "rounded-md border bg-card p-3 cursor-grab active:cursor-grabbing transition-shadow hover:shadow-sm",
+                              draggedTaskId === task.id && "opacity-50"
+                            )}
+                          >
+                            <a
+                              href={`/tasks/${task.id}`}
+                              className="block"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <p className="text-sm font-medium truncate hover:underline">
+                                {task.title}
+                              </p>
+                            </a>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  "text-[10px]",
+                                  priorityColors[task.priority]
+                                )}
+                              >
+                                {task.priority}
+                              </Badge>
+                              {task.dueDate && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(
+                                    task.dueDate
+                                  ).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Create New Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input
+                placeholder="Task title"
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                placeholder="Describe the task..."
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={formStatus}
+                  onValueChange={(v) => setFormStatus(v as TaskStatus)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="backlog">Backlog</SelectItem>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="in_review">In Review</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={formPriority}
+                  onValueChange={(v) => setFormPriority(v as TaskPriority)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input
+                type="date"
+                value={formDueDate}
+                onChange={(e) => setFormDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreate}
+              disabled={!formTitle.trim() || submitting}
+            >
+              {submitting ? "Creating..." : "Create Task"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
