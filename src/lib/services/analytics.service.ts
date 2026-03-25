@@ -16,6 +16,12 @@ export interface ProductivitySummary {
   averageMood: number;
   averageEnergy: number;
   averageStress: number;
+  // Dashboard-friendly fields
+  activeTasks: number;
+  completedToday: number;
+  totalTimeToday: number;
+  currentStreak: number;
+  moodAverage: number;
 }
 
 export interface ProductivityScore {
@@ -89,18 +95,50 @@ export class AnalyticsService {
   getSummary(userId: string): ProductivitySummary {
     const allTasks = this.taskRepo.findByUserId(userId);
     const completedTasks = allTasks.filter((t) => t.status === 'done').length;
+    const activeTasks = allTasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled').length;
     const overdueTasks = this.taskRepo.findOverdue(userId).length;
 
     const allProjects = this.projectRepo.findByUserId(userId, { includeArchived: true });
     const activeProjects = allProjects.filter((p) => p.status === 'active').length;
 
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
     const totalTrackedMinutes = this.timeRepo.getTotalDuration(
       userId,
       thirtyDaysAgo.toISOString(),
       now.toISOString()
     );
+
+    const totalTimeToday = this.timeRepo.getTotalDuration(userId, todayStart, todayEnd);
+
+    // Tasks completed today (have completedAt within today)
+    const completedToday = allTasks.filter((t) => {
+      if (t.status !== 'done' || !(t as unknown as Record<string,unknown>).completedAt) return false;
+      const completedAt = (t as unknown as Record<string,unknown>).completedAt as string;
+      return completedAt >= todayStart && completedAt <= todayEnd;
+    }).length;
+
+    // Current streak: count consecutive days with at least one completed task
+    const completedWithDates = allTasks
+      .filter((t) => t.status === 'done' && (t as unknown as Record<string,unknown>).completedAt)
+      .map((t) => ((t as unknown as Record<string,unknown>).completedAt as string).split('T')[0])
+      .sort()
+      .reverse();
+    const uniqueDays = Array.from(new Set(completedWithDates));
+    let currentStreak = 0;
+    const checkDate = new Date(now);
+    for (const day of uniqueDays) {
+      const dayStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth()+1).padStart(2,'0')}-${String(checkDate.getDate()).padStart(2,'0')}`;
+      if (day === dayStr) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
 
     const averages = this.mentalHealthRepo.getAverages(userId, {
       start: thirtyDaysAgo.toISOString(),
@@ -117,6 +155,11 @@ export class AnalyticsService {
       averageMood: averages.avgMood,
       averageEnergy: averages.avgEnergy,
       averageStress: averages.avgStress,
+      activeTasks,
+      completedToday,
+      totalTimeToday,
+      currentStreak,
+      moodAverage: averages.avgMood,
     };
   }
 

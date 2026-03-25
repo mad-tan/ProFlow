@@ -115,7 +115,8 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
       });
     } finally {
       setIsLoading(false);
-      inputRef.current?.focus();
+      // Defer focus so React re-enables the input first (it's disabled during loading)
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 

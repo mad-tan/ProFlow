@@ -5,6 +5,7 @@ import { fetcher } from "./use-fetch";
 
 export interface DashboardSummary {
   totalProjects: number;
+  activeProjects: number;
   activeTasks: number;
   completedToday: number;
   totalTimeToday: number;
@@ -16,7 +17,7 @@ export interface DashboardSummary {
 
 export function useSummary() {
   const { data, error, isLoading, isValidating } = useSWR<DashboardSummary>(
-    "/api/dashboard/summary",
+    "/api/analytics/summary",
     fetcher,
     { refreshInterval: 60_000 }
   );

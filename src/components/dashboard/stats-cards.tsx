@@ -7,8 +7,6 @@ import {
   Clock,
   Flame,
   Heart,
-  TrendingUp,
-  TrendingDown,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,12 +17,11 @@ interface StatCardProps {
   icon: React.ElementType;
   label: string;
   value: string | number;
-  trend?: number;
   iconColor: string;
   iconBg: string;
 }
 
-function StatCard({ icon: Icon, label, value, trend, iconColor, iconBg }: StatCardProps) {
+function StatCard({ icon: Icon, label, value, iconColor, iconBg }: StatCardProps) {
   return (
     <Card className="group relative overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
       <CardContent className="p-5">
@@ -37,27 +34,7 @@ function StatCard({ icon: Icon, label, value, trend, iconColor, iconBg }: StatCa
             <Icon className={cn("h-5 w-5", iconColor)} />
           </div>
         </div>
-        {trend !== undefined && (
-          <div className="mt-3 flex items-center gap-1 text-xs">
-            {trend >= 0 ? (
-              <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-            ) : (
-              <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-            )}
-            <span className={cn("font-medium", trend >= 0 ? "text-emerald-500" : "text-red-500")}>
-              {trend >= 0 ? "+" : ""}
-              {trend}%
-            </span>
-            <span className="text-muted-foreground">vs last week</span>
-          </div>
-        )}
       </CardContent>
-      <div
-        className={cn(
-          "absolute bottom-0 left-0 right-0 h-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100",
-          iconBg.replace("bg-", "bg-").replace("/10", "").replace("/15", "")
-        )}
-      />
     </Card>
   );
 }
@@ -106,16 +83,14 @@ export function StatsCards() {
     {
       icon: FolderOpen,
       label: "Active Projects",
-      value: summary?.totalProjects ?? 0,
-      trend: 12,
+      value: summary?.activeProjects ?? 0,
       iconColor: "text-blue-600 dark:text-blue-400",
       iconBg: "bg-blue-500/10 dark:bg-blue-500/15",
     },
     {
       icon: CheckCircle2,
-      label: "Tasks Due Today",
+      label: "Active Tasks",
       value: summary?.activeTasks ?? 0,
-      trend: -5,
       iconColor: "text-orange-600 dark:text-orange-400",
       iconBg: "bg-orange-500/10 dark:bg-orange-500/15",
     },
@@ -123,15 +98,13 @@ export function StatsCards() {
       icon: Trophy,
       label: "Completed Today",
       value: summary?.completedToday ?? 0,
-      trend: 23,
       iconColor: "text-emerald-600 dark:text-emerald-400",
       iconBg: "bg-emerald-500/10 dark:bg-emerald-500/15",
     },
     {
       icon: Clock,
-      label: "Time Tracked",
+      label: "Time Today",
       value: formatMinutes(summary?.totalTimeToday ?? 0),
-      trend: 8,
       iconColor: "text-purple-600 dark:text-purple-400",
       iconBg: "bg-purple-500/10 dark:bg-purple-500/15",
     },
@@ -139,15 +112,13 @@ export function StatsCards() {
       icon: Flame,
       label: "Current Streak",
       value: `${summary?.currentStreak ?? 0}d`,
-      trend: 0,
       iconColor: "text-red-600 dark:text-red-400",
       iconBg: "bg-red-500/10 dark:bg-red-500/15",
     },
     {
       icon: Heart,
       label: "Mood Score",
-      value: `${(summary?.moodAverage ?? 0).toFixed(1)}/5`,
-      trend: 4,
+      value: summary?.moodAverage ? `${summary.moodAverage.toFixed(1)}/5` : "—",
       iconColor: "text-pink-600 dark:text-pink-400",
       iconBg: "bg-pink-500/10 dark:bg-pink-500/15",
     },

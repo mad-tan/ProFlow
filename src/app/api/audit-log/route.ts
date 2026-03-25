@@ -8,14 +8,15 @@ export async function GET(request: NextRequest) {
     const service = new AuditLogService();
     const { searchParams } = new URL(request.url);
 
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '30', 10)));
+    const offset = (page - 1) * pageSize;
     const action = searchParams.get('action') ?? undefined;
     const entityType = searchParams.get('entityType') ?? undefined;
 
     const options: Record<string, unknown> = {
-      limit: Math.min(100, Math.max(1, limit)),
-      offset: Math.max(0, offset),
+      limit: pageSize,
+      offset,
     };
 
     if (action) options.action = action;
@@ -27,8 +28,20 @@ export async function GET(request: NextRequest) {
       options.dateRange = { start: startDate, end: endDate };
     }
 
-    const result = service.findByUser(getCurrentUserId(), options);
-    return successResponse(result);
+    const result = service.findByUser(getCurrentUserId(), options as Parameters<typeof service.findByUser>[1]);
+    const totalPages = Math.ceil(result.total / pageSize);
+
+    return successResponse({
+      entries: result.data,
+      pagination: {
+        page,
+        pageSize,
+        totalItems: result.total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
   } catch (error) {
     return errorResponse(error);
   }
