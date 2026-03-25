@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Plus, ListTodo, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/hooks/use-tasks";
+import { useProjects } from "@/lib/hooks/use-projects";
 import type { TaskStatus, TaskPriority } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -75,6 +76,7 @@ export default function TasksPage() {
   const [formStatus, setFormStatus] = useState<TaskStatus>("todo");
   const [formPriority, setFormPriority] = useState<TaskPriority>("medium");
   const [formDueDate, setFormDueDate] = useState("");
+  const [formProjectId, setFormProjectId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -87,6 +89,7 @@ export default function TasksPage() {
   const { tasks, isLoading, createTask, updateTask } = useTasks(
     filters as any
   );
+  const { projects } = useProjects();
 
   const allTasks = tasks ?? [];
 
@@ -100,6 +103,7 @@ export default function TasksPage() {
         status: formStatus,
         priority: formPriority,
         dueDate: formDueDate || undefined,
+        projectId: formProjectId || undefined,
       });
       setDialogOpen(false);
       resetForm();
@@ -116,6 +120,7 @@ export default function TasksPage() {
     setFormStatus("todo");
     setFormPriority("medium");
     setFormDueDate("");
+    setFormProjectId("");
   }
 
   const handleDragStart = useCallback(
@@ -424,13 +429,29 @@ export default function TasksPage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Due Date</Label>
-              <Input
-                type="date"
-                value={formDueDate}
-                onChange={(e) => setFormDueDate(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Input
+                  type="date"
+                  value={formDueDate}
+                  onChange={(e) => setFormDueDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Project (optional)</Label>
+                <Select value={formProjectId || "none"} onValueChange={(v) => setFormProjectId(v === "none" ? "" : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No project</SelectItem>
+                    {(projects ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>

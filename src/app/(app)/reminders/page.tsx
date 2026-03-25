@@ -7,6 +7,7 @@ import {
   BellOff,
   Clock,
   Repeat,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useReminders } from "@/lib/hooks/use-reminders";
@@ -56,7 +57,7 @@ function formatRemindAt(dateStr: string): string {
 }
 
 export default function RemindersPage() {
-  const { reminders, isLoading, createReminder, dismissReminder } =
+  const { reminders, isLoading, createReminder, dismissReminder, deleteReminder } =
     useReminders();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -174,17 +175,27 @@ export default function RemindersPage() {
                 </div>
               </div>
             </div>
-            {reminder.isActive && (
+            <div className="flex items-center gap-1 shrink-0">
+              {reminder.isActive && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => dismissReminder(reminder.id)}
+                >
+                  <BellOff className="h-4 w-4 mr-1" />
+                  Dismiss
+                </Button>
+              )}
               <Button
                 variant="ghost"
-                size="sm"
-                className="shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => dismissReminder(reminder.id)}
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => deleteReminder(reminder.id)}
               >
-                <BellOff className="h-4 w-4 mr-1" />
-                Dismiss
+                <Trash2 className="h-4 w-4" />
               </Button>
-            )}
+            </div>
           </div>
         </CardContent>
       </Card>

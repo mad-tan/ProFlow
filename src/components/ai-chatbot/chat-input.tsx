@@ -109,6 +109,7 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
       });
     } finally {
       setIsLoading(false);
+      inputRef.current?.focus();
     }
   };
 

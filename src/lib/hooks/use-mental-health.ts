@@ -97,9 +97,13 @@ export function useCheckIns(dateRange?: CheckInDateRange) {
     async createCheckIn(
       input: CreateCheckInInput
     ): Promise<MentalHealthCheckIn> {
+      const payload = {
+        date: new Date().toISOString().split("T")[0],
+        ...input,
+      };
       const created = await apiPost<MentalHealthCheckIn>(
         "/api/mental-health/check-ins",
-        input
+        payload
       );
       await invalidateCheckIns();
       return created;

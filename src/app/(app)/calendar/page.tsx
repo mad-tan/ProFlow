@@ -80,14 +80,14 @@ export default function CalendarPage() {
   const selectedTasks = useMemo(() => {
     if (!selectedDateKey || !tasks) return [];
     return (tasks as any[]).filter(
-      (t: any) => t.due_date && t.due_date.startsWith(selectedDateKey)
+      (t: any) => t.dueDate && t.dueDate.startsWith(selectedDateKey)
     );
   }, [tasks, selectedDateKey]);
 
   const selectedReminders = useMemo(() => {
     if (!selectedDateKey || !reminders) return [];
     return (reminders as any[]).filter(
-      (r: any) => r.remind_at && r.remind_at.startsWith(selectedDateKey)
+      (r: any) => r.remindAt && r.remindAt.startsWith(selectedDateKey)
     );
   }, [reminders, selectedDateKey]);
 
@@ -177,9 +177,9 @@ export default function CalendarPage() {
                         >
                           {task.title}
                         </p>
-                        {task.project_name && (
+                        {task.projectName && (
                           <p className="text-xs text-muted-foreground">
-                            {task.project_name}
+                            {task.projectName}
                           </p>
                         )}
                       </div>
@@ -242,7 +242,7 @@ export default function CalendarPage() {
                       </div>
                       <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                         <Clock className="h-3 w-3" />
-                        {formatTime(reminder.remind_at)}
+                        {formatTime(reminder.remindAt)}
                       </div>
                     </div>
                   ))}

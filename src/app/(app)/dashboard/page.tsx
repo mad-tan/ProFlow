@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { StatsCards } from "@/components/dashboard/stats-cards";
 import { RecentTasks } from "@/components/dashboard/recent-tasks";
 import { UpcomingDeadlines } from "@/components/dashboard/upcoming-deadlines";
@@ -19,13 +19,21 @@ function getGreeting(): string {
 
 export default function DashboardPage() {
   const greeting = useMemo(() => getGreeting(), []);
+  const [userName, setUserName] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((json) => { if (json.success) setUserName(json.data.name); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">
-          {greeting}, Tanmay
+          {greeting}{userName ? `, ${userName}` : ""}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Here&apos;s what&apos;s happening with your work today.

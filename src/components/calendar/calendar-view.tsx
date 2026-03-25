@@ -21,14 +21,14 @@ interface Task {
   title: string;
   priority: "urgent" | "high" | "medium" | "low";
   status: string;
-  due_date?: string;
+  dueDate?: string;
 }
 
 interface Reminder {
   id: string;
   title: string;
-  remind_at: string;
-  is_dismissed?: boolean;
+  remindAt: string;
+  isDismissed?: boolean;
 }
 
 interface CalendarViewProps {
@@ -84,8 +84,8 @@ export function CalendarView({
   const tasksByDate = useMemo(() => {
     const map: Record<string, Task[]> = {};
     tasks.forEach((task) => {
-      if (task.due_date) {
-        const key = task.due_date.split("T")[0];
+      if (task.dueDate) {
+        const key = task.dueDate.split("T")[0];
         if (!map[key]) map[key] = [];
         map[key].push(task);
       }
@@ -96,8 +96,8 @@ export function CalendarView({
   const remindersByDate = useMemo(() => {
     const map: Record<string, Reminder[]> = {};
     reminders.forEach((reminder) => {
-      if (reminder.remind_at) {
-        const key = reminder.remind_at.split("T")[0];
+      if (reminder.remindAt) {
+        const key = reminder.remindAt.split("T")[0];
         if (!map[key]) map[key] = [];
         map[key].push(reminder);
       }
