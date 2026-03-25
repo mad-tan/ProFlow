@@ -38,14 +38,9 @@ function buildTimeEntriesUrl(filters?: TimeEntryFilters): string {
 
 /** Invalidate all time-entry-related SWR cache entries. */
 async function invalidateTimeEntries(): Promise<void> {
-  await Promise.all([
-    mutate(
-      (key) => typeof key === "string" && key.startsWith("/api/time-entries")
-    ),
-    mutate(
-      (key) => typeof key === "string" && key.startsWith("/api/timer")
-    ),
-  ]);
+  await mutate(
+    (key) => typeof key === "string" && key.startsWith("/api/time-entries")
+  );
 }
 
 // ─── Hooks ──────────────────────────────────────────────────────────────────
@@ -73,7 +68,7 @@ export function useTimeEntries(filters?: TimeEntryFilters) {
 
 export function useActiveTimer() {
   const { data, error, isLoading, isValidating } = useSWR<TimeEntry | null>(
-    "/api/timer/active",
+    "/api/time-entries/active",
     fetcher,
     {
       // Poll for active timer every 30 seconds to keep UI in sync
@@ -91,7 +86,7 @@ export function useActiveTimer() {
       taskId?: string,
       description?: string
     ): Promise<TimeEntry> {
-      const started = await apiPost<TimeEntry>("/api/timer/start", {
+      const started = await apiPost<TimeEntry>("/api/time-entries/start", {
         taskId,
         description,
       });
@@ -100,7 +95,7 @@ export function useActiveTimer() {
     },
 
     async stopTimer(): Promise<TimeEntry> {
-      const stopped = await apiPost<TimeEntry>("/api/timer/stop", {});
+      const stopped = await apiPost<TimeEntry>("/api/time-entries/stop", {});
       await invalidateTimeEntries();
       return stopped;
     },

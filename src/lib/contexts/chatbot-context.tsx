@@ -1,6 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useState, useCallback } from "react";
+import type { PendingIntent } from "@/app/api/ai/chat/route";
+
+export type { PendingIntent };
 
 export interface ChatMessage {
   id: string;
@@ -16,6 +19,8 @@ interface ChatbotContextType {
   messages: ChatMessage[];
   addMessage: (message: Omit<ChatMessage, "id" | "timestamp">) => void;
   clearMessages: () => void;
+  pendingIntent: PendingIntent | null;
+  setPendingIntent: (intent: PendingIntent | null) => void;
 }
 
 const ChatbotContext = createContext<ChatbotContextType | undefined>(undefined);
@@ -25,21 +30,16 @@ let messageIdCounter = 0;
 export function ChatbotProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
 
-  const toggleOpen = useCallback(() => {
-    setIsOpen((prev) => !prev);
-  }, []);
+  const toggleOpen = useCallback(() => setIsOpen((prev) => !prev), []);
 
   const addMessage = useCallback(
     (message: Omit<ChatMessage, "id" | "timestamp">) => {
       messageIdCounter += 1;
       setMessages((prev) => [
         ...prev,
-        {
-          ...message,
-          id: `msg-${messageIdCounter}`,
-          timestamp: Date.now(),
-        },
+        { ...message, id: `msg-${messageIdCounter}`, timestamp: Date.now() },
       ]);
     },
     []
@@ -47,11 +47,12 @@ export function ChatbotProvider({ children }: { children: React.ReactNode }) {
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    setPendingIntent(null);
   }, []);
 
   return (
     <ChatbotContext.Provider
-      value={{ isOpen, setIsOpen, toggleOpen, messages, addMessage, clearMessages }}
+      value={{ isOpen, setIsOpen, toggleOpen, messages, addMessage, clearMessages, pendingIntent, setPendingIntent }}
     >
       {children}
     </ChatbotContext.Provider>
@@ -60,8 +61,6 @@ export function ChatbotProvider({ children }: { children: React.ReactNode }) {
 
 export function useChatbot() {
   const context = useContext(ChatbotContext);
-  if (!context) {
-    throw new Error("useChatbot must be used within a ChatbotProvider");
-  }
+  if (!context) throw new Error("useChatbot must be used within a ChatbotProvider");
   return context;
 }

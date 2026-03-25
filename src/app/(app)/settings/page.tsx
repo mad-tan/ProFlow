@@ -1,16 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import {
-  User,
-  Palette,
-  Brain,
-  Database,
-  Download,
-  Upload,
-  Moon,
-  Sun,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Palette, Lock, Database, Download, Moon, Sun, CheckCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,63 +10,115 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useTheme } from "@/lib/contexts/theme-context";
+import { toast } from "sonner";
+
+interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  timezone: string;
+}
 
 export default function SettingsPage() {
-  const [name, setName] = useState("Tanmay");
-  const [email, setEmail] = useState("tanmay@example.com");
-  const [darkMode, setDarkMode] = useState(false);
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gpt-4o");
-  const [saving, setSaving] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
 
-  function handleToggleTheme(checked: boolean) {
-    setDarkMode(checked);
-    if (checked) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
+  // Profile state
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [name, setName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  // Load user profile
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success) {
+          setProfile(json.data);
+          setName(json.data.name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleSaveProfile() {
+    if (!name.trim()) { toast.error("Name cannot be empty"); return; }
+    setSavingProfile(true);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error?.message || "Failed to save"); return; }
+      setProfile(json.data);
+      toast.success("Profile updated successfully");
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setSavingProfile(false);
     }
   }
 
-  async function handleSaveProfile() {
-    setSaving(true);
-    // Simulated save
-    await new Promise((r) => setTimeout(r, 500));
-    setSaving(false);
+  async function handleChangePassword() {
+    if (!currentPassword) { toast.error("Enter your current password"); return; }
+    if (!newPassword) { toast.error("Enter a new password"); return; }
+    if (newPassword.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (newPassword !== confirmNewPassword) { toast.error("Passwords do not match"); return; }
+
+    setSavingPassword(true);
+    try {
+      const res = await fetch("/api/auth/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const json = await res.json();
+      if (!res.ok) { toast.error(json.error?.message || "Failed to change password"); return; }
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      toast.success("Password changed successfully");
+    } catch {
+      toast.error("Something went wrong");
+    } finally {
+      setSavingPassword(false);
+    }
   }
 
-  function handleExport() {
-    // Trigger a download of a placeholder JSON
-    const data = JSON.stringify(
-      {
-        exported: new Date().toISOString(),
-        message: "Export functionality would serialize all user data.",
-      },
-      null,
-      2
-    );
-    const blob = new Blob([data], { type: "application/json" });
+  async function handleSignOut() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
+
+  function handleExportData() {
+    const data = {
+      exported: new Date().toISOString(),
+      user: profile?.email,
+      note: "To export your full data, run: sqlite3 data/productivity.db .dump > backup.sql",
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `productivity-export-${new Date().toISOString().split("T")[0]}.json`;
+    a.download = `proflow-export-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success("Export info downloaded");
   }
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <PageHeader
-        title="Settings"
-        description="Manage your account and preferences"
-      />
+      <PageHeader title="Settings" description="Manage your account and preferences" />
 
       {/* Profile */}
       <Card>
@@ -87,11 +131,12 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="settings-name">Name</Label>
+              <Label htmlFor="settings-name">Display Name</Label>
               <Input
                 id="settings-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
               />
             </div>
             <div className="space-y-2">
@@ -99,83 +144,91 @@ export default function SettingsPage() {
               <Input
                 id="settings-email"
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={profile?.email ?? ""}
+                disabled
+                className="opacity-60 cursor-not-allowed"
               />
+              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
             </div>
           </div>
-          <Button size="sm" onClick={handleSaveProfile} disabled={saving}>
-            {saving ? "Saving..." : "Save Profile"}
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground">Timezone: {profile?.timezone ?? "Loading…"}</p>
+          </div>
+          <Button size="sm" onClick={handleSaveProfile} disabled={savingProfile || !profile}>
+            {savingProfile ? "Saving…" : "Save Profile"}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Preferences */}
+      {/* Appearance */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Palette className="h-4 w-4" />
-            Preferences
+            Appearance
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {darkMode ? (
+              {theme === "dark" ? (
                 <Moon className="h-4 w-4 text-muted-foreground" />
               ) : (
                 <Sun className="h-4 w-4 text-muted-foreground" />
               )}
               <div>
                 <p className="text-sm font-medium">Dark Mode</p>
-                <p className="text-xs text-muted-foreground">
-                  Switch between light and dark themes
-                </p>
+                <p className="text-xs text-muted-foreground">Switch between light and dark themes</p>
               </div>
             </div>
-            <Switch checked={darkMode} onCheckedChange={handleToggleTheme} />
+            <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
           </div>
         </CardContent>
       </Card>
 
-      {/* AI Configuration */}
+      {/* Change Password */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Brain className="h-4 w-4" />
-            AI Configuration
+            <Lock className="h-4 w-4" />
+            Change Password
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="api-key">API Key</Label>
+            <Label htmlFor="current-password">Current Password</Label>
             <Input
-              id="api-key"
+              id="current-password"
               type="password"
-              placeholder="sk-..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
             />
-            <p className="text-xs text-muted-foreground">
-              Your API key is stored locally and never sent to our servers.
-            </p>
           </div>
-          <div className="space-y-2">
-            <Label>Model</Label>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="w-[240px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                <SelectItem value="claude-sonnet">Claude Sonnet</SelectItem>
-                <SelectItem value="claude-haiku">Claude Haiku</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm New Password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                placeholder="Repeat new password"
+              />
+            </div>
           </div>
-          <Button size="sm" variant="outline">
-            Save AI Settings
+          <Button size="sm" onClick={handleChangePassword} disabled={savingPassword}>
+            {savingPassword ? "Changing…" : "Change Password"}
           </Button>
         </CardContent>
       </Card>
@@ -185,33 +238,59 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Database className="h-4 w-4" />
-            Data Management
+            Data
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Export or import your data for backup or migration.
+            Your data is stored locally in a SQLite database on the server.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Data
-            </Button>
-            <Button variant="outline">
-              <Upload className="mr-2 h-4 w-4" />
-              Import Data
+          <Button variant="outline" size="sm" onClick={handleExportData}>
+            <Download className="mr-2 h-4 w-4" />
+            Export Info
+          </Button>
+
+          <Separator />
+
+          <div>
+            <p className="text-sm font-medium">Sign Out</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-3">
+              You will be redirected to the login page.
+            </p>
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              Sign Out
             </Button>
           </div>
+
           <Separator />
+
           <div>
             <p className="text-sm font-medium text-destructive">Danger Zone</p>
             <p className="text-xs text-muted-foreground mt-1 mb-3">
-              Deleting your account will permanently remove all data. This
-              action cannot be undone.
+              Contact your administrator to delete your account and all associated data.
             </p>
-            <Button variant="destructive" size="sm">
-              Delete Account
-            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI Assistant Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-emerald-500" />
+            AI Assistant
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            The AI assistant is built-in and ready to use — no API keys needed. You can access it via the chat button in the bottom-right corner.
+          </p>
+          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+            <p>✓ Create and delete tasks</p>
+            <p>✓ Set reminders with natural language</p>
+            <p>✓ Start and stop time tracking</p>
+            <p>✓ Create projects and checklists</p>
+            <p>✓ View productivity summaries</p>
           </div>
         </CardContent>
       </Card>
