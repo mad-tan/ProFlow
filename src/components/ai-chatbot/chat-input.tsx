@@ -16,13 +16,19 @@ interface ChatInputProps {
 // Maps action types to SWR cache keys to revalidate
 const CACHE_INVALIDATION_MAP: Record<string, string[]> = {
   create_task: ["/api/tasks", "/api/analytics/summary"],
+  update_task: ["/api/tasks", "/api/analytics/summary"],
   delete_task: ["/api/tasks", "/api/analytics/summary"],
   complete_task: ["/api/tasks", "/api/analytics/summary"],
   create_project: ["/api/projects", "/api/analytics/summary"],
+  delete_project: ["/api/projects", "/api/analytics/summary"],
   set_reminder: ["/api/reminders"],
+  delete_reminder: ["/api/reminders"],
   start_timer: ["/api/time-entries", "/api/time-entries/active"],
   stop_timer: ["/api/time-entries", "/api/time-entries/active", "/api/analytics/summary"],
   create_checklist: ["/api/checklists"],
+  add_checklist_item: ["/api/checklists"],
+  log_mood: ["/api/mental-health/check-ins", "/api/analytics/summary"],
+  write_journal: ["/api/mental-health/journal"],
   show_summary: ["/api/analytics/summary"],
 };
 

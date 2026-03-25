@@ -7,6 +7,8 @@ import { TimeTrackingService } from '@/lib/services/time-tracking.service';
 import { ChecklistService } from '@/lib/services/checklist.service';
 import { ProjectService } from '@/lib/services/project.service';
 import { AnalyticsService } from '@/lib/services/analytics.service';
+import { MentalHealthService } from '@/lib/services/mental-health.service';
+import type { TaskPriority } from '@/lib/types';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ function extractTitle(msg: string): string | null {
   ];
   for (const p of patterns) {
     const m = msg.match(p);
-    if (m?.[1]?.trim().length > 1) return m[1].trim().replace(/["']+$/, '').trim();
+    if (m?.[1] && m[1].trim().length > 1) return m[1].trim().replace(/["']+$/, '').trim();
   }
   // Strip intent keywords and see what remains as the title
   const stripped = msg
@@ -151,6 +153,44 @@ function findTaskByName(userId: string, name: string): { id: string; title: stri
   return found ?? null;
 }
 
+function findProjectByName(userId: string, name: string): { id: string; name: string; status: string } | null {
+  const service = new ProjectService();
+  const projects = service.listByUser(userId, {}) as Array<{ id: string; name: string; status: string }>;
+  const nl = name.toLowerCase();
+  let found = projects.find(p => p.name.toLowerCase() === nl);
+  if (!found) found = projects.find(p => p.name.toLowerCase().includes(nl) || nl.includes(p.name.toLowerCase()));
+  return found ?? null;
+}
+
+function findReminderByName(userId: string, name: string): { id: string; title: string } | null {
+  const service = new ReminderService();
+  const reminders = service.listByUser(userId, {}) as Array<{ id: string; title: string }>;
+  const nl = name.toLowerCase();
+  let found = reminders.find(r => r.title.toLowerCase() === nl);
+  if (!found) found = reminders.find(r => r.title.toLowerCase().includes(nl) || nl.includes(r.title.toLowerCase()));
+  return found ?? null;
+}
+
+function findChecklistByName(userId: string, name: string): { id: string; title: string } | null {
+  const service = new ChecklistService();
+  const lists = service.listByUser(userId) as Array<{ id: string; title: string }>;
+  const nl = name.toLowerCase();
+  let found = lists.find(c => c.title.toLowerCase() === nl);
+  if (!found) found = lists.find(c => c.title.toLowerCase().includes(nl) || nl.includes(c.title.toLowerCase()));
+  return found ?? null;
+}
+
+function extractStatus(msg: string): string | null {
+  const l = msg.toLowerCase();
+  if (/\bin[_\s]?progress\b|\bstarted\b|\bworking on\b/.test(l)) return 'in_progress';
+  if (/\bin[_\s]?review\b/.test(l)) return 'in_review';
+  if (/\bdone\b|\bcomplete[d]?\b|\bfinish(ed)?\b/.test(l)) return 'done';
+  if (/\bbacklog\b/.test(l)) return 'backlog';
+  if (/\btodo\b|\bto[_\s]?do\b|\bnot started\b/.test(l)) return 'todo';
+  if (/\bcancell?ed?\b/.test(l)) return 'cancelled';
+  return null;
+}
+
 function isConfirm(msg: string): boolean {
   return /\b(yes|yeah|yep|yup|sure|confirm|ok|okay|do it|go ahead|delete it|remove it)\b/i.test(msg);
 }
@@ -170,33 +210,46 @@ function formatDate(iso: string): string {
 // ─── Intent Detection ────────────────────────────────────────────────────────
 
 type IntentType =
-  | 'create_task' | 'delete_task' | 'complete_task' | 'list_tasks'
-  | 'create_project' | 'list_projects'
-  | 'set_reminder' | 'list_reminders'
+  | 'create_task' | 'delete_task' | 'complete_task' | 'list_tasks' | 'update_task'
+  | 'create_project' | 'list_projects' | 'delete_project'
+  | 'set_reminder' | 'list_reminders' | 'delete_reminder'
   | 'start_timer' | 'stop_timer'
-  | 'create_checklist'
+  | 'create_checklist' | 'add_checklist_item'
+  | 'log_mood' | 'write_journal'
   | 'show_summary'
   | 'help' | 'unknown';
 
 function detectIntent(msg: string): IntentType {
-  const l = lower(msg);
-
+  // Tasks
   if (/\b(delete|remove|trash)\b.*(task|todo)\b/i.test(msg) || /\b(task|todo).*(delete|remove|trash)\b/i.test(msg)) return 'delete_task';
   if (/\b(complete|finish|done|mark.*done|close)\b.*(task|todo)\b/i.test(msg) || /\b(task|todo).*(complete|done|finish)\b/i.test(msg)) return 'complete_task';
+  if (/\b(update|edit|change|modify|rename|set|move)\b.*(task|todo)\b/i.test(msg) || /\b(task|todo).*(update|edit|change|priority|due|status)\b/i.test(msg)) return 'update_task';
   if (/\b(create|add|new|make)\b.*(task|todo)\b/i.test(msg) || /\b(task|todo)\b.*(create|add|new)\b/i.test(msg)) return 'create_task';
   if (/\b(show|list|view|get|what are|my)\b.*(task|todo)\b/i.test(msg)) return 'list_tasks';
 
+  // Projects
+  if (/\b(delete|remove|trash)\b.*(project)\b/i.test(msg)) return 'delete_project';
   if (/\b(create|add|new|make)\b.*(project)\b/i.test(msg)) return 'create_project';
   if (/\b(show|list|view|my)\b.*(project)\b/i.test(msg)) return 'list_projects';
 
+  // Reminders
+  if (/\b(delete|remove)\b.*(reminder)\b/i.test(msg)) return 'delete_reminder';
   if (/\b(remind|reminder|set.*reminder|create.*reminder)\b/i.test(msg)) return 'set_reminder';
   if (/\b(show|list|my)\b.*(reminder)\b/i.test(msg)) return 'list_reminders';
 
-  if (/\b(start|begin|track)\b.*(timer|time|tracking)\b/i.test(msg) || /\b(timer|track time)\b/i.test(msg) && !/stop|end/i.test(msg)) return 'start_timer';
+  // Timer
   if (/\b(stop|end|pause)\b.*(timer|time|tracking)\b/i.test(msg) || /\bstop timer\b/i.test(msg)) return 'stop_timer';
+  if (/\b(start|begin|track)\b.*(timer|time|tracking)\b/i.test(msg) || /\btimer\b/i.test(msg)) return 'start_timer';
 
+  // Checklists
+  if (/\badd\b.*(item|step|to).*(checklist|list)\b/i.test(msg) || /\b(checklist|list)\b.*(add|item)\b/i.test(msg)) return 'add_checklist_item';
   if (/\b(create|add|new|make)\b.*(checklist)\b/i.test(msg)) return 'create_checklist';
 
+  // Mental health
+  if (/\b(log|track|record)\b.*(mood|feeling|mental|health|check.?in)\b/i.test(msg) || /\b(mood|check.?in|how.*feeling|feeling today)\b/i.test(msg)) return 'log_mood';
+  if (/\b(journal|diary|write|note)\b/i.test(msg)) return 'write_journal';
+
+  // Analytics
   if (/\b(summary|stats|analytics|overview|how am i doing|productivity|progress)\b/i.test(msg)) return 'show_summary';
 
   if (/\b(help|what can you do|commands|capabilities|features)\b/i.test(msg)) return 'help';
@@ -257,7 +310,7 @@ async function handlePendingIntent(
           const task = service.create({
             userId,
             title: c.title as string,
-            priority: (c.priority as string | undefined) ?? 'medium',
+            priority: ((c.priority as string | undefined) ?? 'medium') as TaskPriority,
             dueDate: (c.dueDate as string | undefined) ?? null,
             status: 'todo',
             tags: [],
@@ -302,7 +355,6 @@ async function handlePendingIntent(
             name: c.name as string,
             description: c.description as string | undefined,
             status: 'active',
-            metadata: {},
           });
           return {
             role: 'assistant',
@@ -440,6 +492,251 @@ async function handlePendingIntent(
       }
       break;
     }
+
+    // ── Update Task ──────────────────────────────────────────────
+    case 'update_task': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_name') {
+        const name = msg.trim().replace(/["']+$/, '').trim();
+        const task = findTaskByName(userId, name);
+        if (!task) return { role: 'assistant', content: `I couldn't find a task matching **"${name}"**. Try "show my tasks" first.`, pendingIntent: null };
+        c.taskId = task.id;
+        c.taskTitle = task.title;
+        return {
+          role: 'assistant',
+          content: `Found **"${task.title}"**. What would you like to change? You can say:\n- *priority to high/medium/low/urgent*\n- *due date to tomorrow*\n- *status to in progress/done*`,
+          pendingIntent: { type: 'update_task', step: 'awaiting_change', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_change') {
+        const updates: Record<string, unknown> = {};
+        const priority = extractPriority(msg);
+        const dueDate = extractDueDate(msg);
+        const status = extractStatus(msg);
+        if (priority && priority !== 'none') updates.priority = priority;
+        if (dueDate && dueDate !== 'none') updates.dueDate = dueDate;
+        if (dueDate === 'none') updates.dueDate = null;
+        if (status) updates.status = status;
+        if (Object.keys(updates).length === 0) {
+          return { role: 'assistant', content: "I didn't catch what to change. Try: *priority to high*, *due date to tomorrow*, or *status to in progress*.", pendingIntent: pending };
+        }
+        try {
+          const service = new TaskService();
+          service.update(c.taskId as string, userId, updates as Parameters<typeof service.update>[2]);
+          const changes = Object.entries(updates).map(([k, v]) => `${k} → **${v}**`).join(', ');
+          return {
+            role: 'assistant',
+            content: `Done! ✓ Updated **"${c.taskTitle}"**: ${changes}.`,
+            action: { type: 'update_task', success: true, data: { id: c.taskId, ...updates } },
+            pendingIntent: null,
+          };
+        } catch (err) {
+          return { role: 'assistant', content: `Couldn't update the task: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
+      }
+      break;
+    }
+
+    // ── Delete Project ───────────────────────────────────────────
+    case 'delete_project': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_name') {
+        const name = msg.trim().replace(/["']+$/, '').trim();
+        const project = findProjectByName(userId, name);
+        if (!project) return { role: 'assistant', content: `I couldn't find a project matching **"${name}"**. Try "show my projects" first.`, pendingIntent: null };
+        c.projectId = project.id;
+        c.projectName = project.name;
+        return {
+          role: 'assistant',
+          content: `Are you sure you want to **permanently delete** project **"${project.name}"**? This will also delete all its tasks. (say *yes* to confirm)`,
+          pendingIntent: { type: 'delete_project', step: 'awaiting_confirmation', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_confirmation') {
+        if (isCancel(msg)) return { role: 'assistant', content: "Cancelled. The project was not deleted.", pendingIntent: null };
+        if (isConfirm(msg)) {
+          try {
+            const service = new ProjectService();
+            service.delete(c.projectId as string, userId);
+            return {
+              role: 'assistant',
+              content: `Done. Project **"${c.projectName}"** has been deleted.`,
+              action: { type: 'delete_project', success: true, data: { id: c.projectId } },
+              pendingIntent: null,
+            };
+          } catch (err) {
+            return { role: 'assistant', content: `Couldn't delete the project: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+          }
+        }
+        return { role: 'assistant', content: "Please say *yes* to delete or *no* to cancel.", pendingIntent: pending };
+      }
+      break;
+    }
+
+    // ── Delete Reminder ──────────────────────────────────────────
+    case 'delete_reminder': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_name') {
+        const name = msg.trim().replace(/["']+$/, '').trim();
+        const reminder = findReminderByName(userId, name);
+        if (!reminder) return { role: 'assistant', content: `I couldn't find a reminder matching **"${name}"**. Try "show my reminders" first.`, pendingIntent: null };
+        c.reminderId = reminder.id;
+        c.reminderTitle = reminder.title;
+        return {
+          role: 'assistant',
+          content: `Delete reminder **"${reminder.title}"**? (say *yes* to confirm)`,
+          pendingIntent: { type: 'delete_reminder', step: 'awaiting_confirmation', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_confirmation') {
+        if (isCancel(msg)) return { role: 'assistant', content: "Cancelled.", pendingIntent: null };
+        if (isConfirm(msg)) {
+          try {
+            const service = new ReminderService();
+            service.delete(c.reminderId as string, userId);
+            return {
+              role: 'assistant',
+              content: `Done. Reminder **"${c.reminderTitle}"** has been deleted.`,
+              action: { type: 'delete_reminder', success: true, data: { id: c.reminderId } },
+              pendingIntent: null,
+            };
+          } catch (err) {
+            return { role: 'assistant', content: `Couldn't delete the reminder: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+          }
+        }
+        return { role: 'assistant', content: "Please say *yes* to delete or *no* to cancel.", pendingIntent: pending };
+      }
+      break;
+    }
+
+    // ── Add Checklist Item ────────────────────────────────────────
+    case 'add_checklist_item': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_checklist') {
+        const name = msg.trim().replace(/["']+$/, '').trim();
+        const list = findChecklistByName(userId, name);
+        if (!list) return { role: 'assistant', content: `I couldn't find a checklist matching **"${name}"**. Try "show my checklists" or create one first.`, pendingIntent: null };
+        c.checklistId = list.id;
+        c.checklistTitle = list.title;
+        return {
+          role: 'assistant',
+          content: `What item would you like to add to **"${list.title}"**?`,
+          pendingIntent: { type: 'add_checklist_item', step: 'awaiting_item', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_item') {
+        const itemTitle = msg.trim().replace(/["']+$/, '').trim();
+        if (!itemTitle) return { role: 'assistant', content: "What should the item be called?", pendingIntent: pending };
+        try {
+          const service = new ChecklistService();
+          service.addItem(c.checklistId as string, userId, itemTitle);
+          return {
+            role: 'assistant',
+            content: `Done! ✓ Added **"${itemTitle}"** to checklist **"${c.checklistTitle}"**.`,
+            action: { type: 'add_checklist_item', success: true, data: { checklistId: c.checklistId, item: itemTitle } },
+            pendingIntent: null,
+          };
+        } catch (err) {
+          return { role: 'assistant', content: `Couldn't add the item: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
+      }
+      break;
+    }
+
+    // ── Log Mood ─────────────────────────────────────────────────
+    case 'log_mood': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_mood') {
+        const numMatch = msg.match(/\b([1-5])\b/);
+        const mood = numMatch ? parseInt(numMatch[1]) : null;
+        if (!mood) return { role: 'assistant', content: "Please rate your mood from 1 (terrible) to 5 (great).", pendingIntent: pending };
+        c.moodRating = mood;
+        return {
+          role: 'assistant',
+          content: `Energy level? Rate from 1 (exhausted) to 5 (energized).`,
+          pendingIntent: { type: 'log_mood', step: 'awaiting_energy', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_energy') {
+        const numMatch = msg.match(/\b([1-5])\b/);
+        const energy = numMatch ? parseInt(numMatch[1]) : 3;
+        c.energyLevel = energy;
+        return {
+          role: 'assistant',
+          content: `Stress level? Rate from 1 (relaxed) to 5 (very stressed).`,
+          pendingIntent: { type: 'log_mood', step: 'awaiting_stress', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_stress') {
+        const numMatch = msg.match(/\b([1-5])\b/);
+        const stress = numMatch ? parseInt(numMatch[1]) : 3;
+        c.stressLevel = stress;
+        return {
+          role: 'assistant',
+          content: `Any notes? (or say *skip*)`,
+          pendingIntent: { type: 'log_mood', step: 'awaiting_notes', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_notes') {
+        if (!isSkip(msg)) c.notes = msg.trim();
+        try {
+          const service = new MentalHealthService();
+          const today = new Date().toISOString().split('T')[0];
+          const checkIn = service.createCheckIn({
+            userId,
+            date: today,
+            moodRating: c.moodRating as 1|2|3|4|5,
+            energyLevel: c.energyLevel as 1|2|3|4|5,
+            stressLevel: c.stressLevel as 1|2|3|4|5,
+            notes: c.notes as string | undefined,
+          });
+          const moodLabels = ['', 'Terrible', 'Bad', 'Okay', 'Good', 'Great'];
+          return {
+            role: 'assistant',
+            content: `Done! ✓ Check-in logged — mood: **${moodLabels[c.moodRating as number]}** (${c.moodRating}/5), energy: ${c.energyLevel}/5, stress: ${c.stressLevel}/5.`,
+            action: { type: 'log_mood', success: true, data: checkIn },
+            pendingIntent: null,
+          };
+        } catch (err) {
+          const msg2 = err instanceof Error ? err.message : 'error';
+          if (msg2.toLowerCase().includes('already')) {
+            return { role: 'assistant', content: "You've already logged a check-in today! You can edit it on the Mental Health page.", pendingIntent: null };
+          }
+          return { role: 'assistant', content: `Couldn't save check-in: ${msg2}`, pendingIntent: null };
+        }
+      }
+      break;
+    }
+
+    // ── Write Journal ────────────────────────────────────────────
+    case 'write_journal': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_title') {
+        if (!isSkip(msg)) c.title = msg.trim().replace(/["']+$/, '').trim();
+        return {
+          role: 'assistant',
+          content: `What would you like to write about?`,
+          pendingIntent: { type: 'write_journal', step: 'awaiting_content', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_content') {
+        const content = msg.trim();
+        if (!content) return { role: 'assistant', content: "Please write something for your journal entry.", pendingIntent: pending };
+        try {
+          const service = new MentalHealthService();
+          const entry = service.createJournalEntry({ userId, title: c.title as string | undefined, content });
+          return {
+            role: 'assistant',
+            content: `Done! ✓ Journal entry saved${c.title ? ` — **"${c.title}"**` : ''}.`,
+            action: { type: 'write_journal', success: true, data: entry },
+            pendingIntent: null,
+          };
+        } catch (err) {
+          return { role: 'assistant', content: `Couldn't save journal entry: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
+      }
+      break;
+    }
   }
 
   return { role: 'assistant', content: "I'm not sure what you mean. Type *cancel* to start over.", pendingIntent: pending };
@@ -485,7 +782,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
       // Have everything — execute
       try {
         const service = new TaskService();
-        const task = service.create({ userId, title: titleFromMsg, priority: priority !== 'none' ? priority : 'medium', dueDate: resolvedDue ?? null, status: 'todo', tags: [] });
+        const task = service.create({ userId, title: titleFromMsg, priority: (priority !== 'none' ? priority : 'medium') as TaskPriority, dueDate: resolvedDue ?? null, status: 'todo', tags: [] });
         const parts = [`Done! ✓ Created task **"${titleFromMsg}"**`];
         if (resolvedDue) parts.push(`due ${formatDate(resolvedDue)}`);
         if (priority && priority !== 'medium' && priority !== 'none') parts.push(`with **${priority}** priority`);
@@ -630,7 +927,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
     // ── List Reminders ───────────────────────────────────────────
     case 'list_reminders': {
       const service = new ReminderService();
-      const reminders = service.listByUser(userId, { isActive: true }) as Array<{ title: string; remindAt: string }>;
+      const reminders = service.listByUser(userId, { upcoming: true }) as Array<{ title: string; remindAt: string }>;
       if (reminders.length === 0) {
         return { role: 'assistant', content: "You have no active reminders. Say *set a reminder* to create one!", pendingIntent: null };
       }
@@ -706,11 +1003,189 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
       }
     }
 
+    // ── Update Task ──────────────────────────────────────────────
+    case 'update_task': {
+      const nameFromMsg = extractTitle(msg.replace(/\b(update|edit|change|modify|rename|set|move)\s+(the\s+)?(task\s+)?/gi, '').trim());
+      const priority = extractPriority(msg);
+      const dueDate = extractDueDate(msg);
+      const status = extractStatus(msg);
+      const hasChange = priority || dueDate || status;
+
+      if (!nameFromMsg) {
+        return {
+          role: 'assistant',
+          content: "Which task do you want to update? Tell me its name.",
+          pendingIntent: { type: 'update_task', step: 'awaiting_name', collected: {} },
+        };
+      }
+      const task = findTaskByName(userId, nameFromMsg);
+      if (!task) {
+        return {
+          role: 'assistant',
+          content: `I couldn't find a task matching **"${nameFromMsg}"**. Try "show my tasks" to see your tasks.`,
+          pendingIntent: null,
+        };
+      }
+      if (!hasChange) {
+        return {
+          role: 'assistant',
+          content: `Found **"${task.title}"**. What would you like to change?\n- *priority to high/medium/low/urgent*\n- *due date to tomorrow*\n- *status to in progress/done*`,
+          pendingIntent: { type: 'update_task', step: 'awaiting_change', collected: { taskId: task.id, taskTitle: task.title } },
+        };
+      }
+      const updates: Record<string, unknown> = {};
+      if (priority && priority !== 'none') updates.priority = priority;
+      if (dueDate && dueDate !== 'none') updates.dueDate = dueDate;
+      if (dueDate === 'none') updates.dueDate = null;
+      if (status) updates.status = status;
+      try {
+        const service = new TaskService();
+        service.update(task.id, userId, updates as Parameters<typeof service.update>[2]);
+        const changes = Object.entries(updates).map(([k, v]) => `${k} → **${v}**`).join(', ');
+        return {
+          role: 'assistant',
+          content: `Done! ✓ Updated **"${task.title}"**: ${changes}.`,
+          action: { type: 'update_task', success: true, data: { id: task.id, ...updates } },
+          pendingIntent: null,
+        };
+      } catch (err) {
+        return { role: 'assistant', content: `Couldn't update the task: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+      }
+    }
+
+    // ── Delete Project ───────────────────────────────────────────
+    case 'delete_project': {
+      const nameFromMsg = extractTitle(msg.replace(/\b(delete|remove|trash)\s+(the\s+)?project\b/gi, '').trim());
+      if (!nameFromMsg) {
+        return {
+          role: 'assistant',
+          content: "Which project do you want to delete? Tell me its name.",
+          pendingIntent: { type: 'delete_project', step: 'awaiting_name', collected: {} },
+        };
+      }
+      const project = findProjectByName(userId, nameFromMsg);
+      if (!project) {
+        return {
+          role: 'assistant',
+          content: `I couldn't find a project matching **"${nameFromMsg}"**. Try "show my projects".`,
+          pendingIntent: null,
+        };
+      }
+      return {
+        role: 'assistant',
+        content: `Are you sure you want to **permanently delete** project **"${project.name}"**? (say *yes* to confirm or *no* to cancel)`,
+        pendingIntent: { type: 'delete_project', step: 'awaiting_confirmation', collected: { projectId: project.id, projectName: project.name } },
+      };
+    }
+
+    // ── Delete Reminder ──────────────────────────────────────────
+    case 'delete_reminder': {
+      const nameFromMsg = extractTitle(msg.replace(/\b(delete|remove)\s+(the\s+)?reminder\b/gi, '').trim());
+      if (!nameFromMsg) {
+        return {
+          role: 'assistant',
+          content: "Which reminder do you want to delete? Tell me its title.",
+          pendingIntent: { type: 'delete_reminder', step: 'awaiting_name', collected: {} },
+        };
+      }
+      const reminder = findReminderByName(userId, nameFromMsg);
+      if (!reminder) {
+        return {
+          role: 'assistant',
+          content: `I couldn't find a reminder matching **"${nameFromMsg}"**. Try "show my reminders".`,
+          pendingIntent: null,
+        };
+      }
+      return {
+        role: 'assistant',
+        content: `Delete reminder **"${reminder.title}"**? (say *yes* to confirm)`,
+        pendingIntent: { type: 'delete_reminder', step: 'awaiting_confirmation', collected: { reminderId: reminder.id, reminderTitle: reminder.title } },
+      };
+    }
+
+    // ── Add Checklist Item ────────────────────────────────────────
+    case 'add_checklist_item': {
+      // Try to extract checklist name from the message
+      const itemMatch = msg.match(/\badd\s+(?:item\s+)?["']?([^"']+?)["']?\s+(?:to|in)\s+(?:checklist\s+)?["']?([^"']+?)["']?\s*$/i);
+      const checklistNameFromMsg = itemMatch ? itemMatch[2].trim() : extractTitle(msg.replace(/\badd\b.*(item|to|in|checklist)\b/gi, '').trim());
+      const itemNameFromMsg = itemMatch ? itemMatch[1].trim() : null;
+
+      if (!checklistNameFromMsg) {
+        return {
+          role: 'assistant',
+          content: "Which checklist do you want to add an item to?",
+          pendingIntent: { type: 'add_checklist_item', step: 'awaiting_checklist', collected: {} },
+        };
+      }
+      const list = findChecklistByName(userId, checklistNameFromMsg);
+      if (!list) {
+        return {
+          role: 'assistant',
+          content: `I couldn't find a checklist matching **"${checklistNameFromMsg}"**. Try creating one first.`,
+          pendingIntent: null,
+        };
+      }
+      if (!itemNameFromMsg) {
+        return {
+          role: 'assistant',
+          content: `What item would you like to add to **"${list.title}"**?`,
+          pendingIntent: { type: 'add_checklist_item', step: 'awaiting_item', collected: { checklistId: list.id, checklistTitle: list.title } },
+        };
+      }
+      try {
+        const service = new ChecklistService();
+        service.addItem(list.id, userId, itemNameFromMsg);
+        return {
+          role: 'assistant',
+          content: `Done! ✓ Added **"${itemNameFromMsg}"** to **"${list.title}"**.`,
+          action: { type: 'add_checklist_item', success: true, data: { checklistId: list.id, item: itemNameFromMsg } },
+          pendingIntent: null,
+        };
+      } catch (err) {
+        return { role: 'assistant', content: `Couldn't add the item: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+      }
+    }
+
+    // ── Log Mood ─────────────────────────────────────────────────
+    case 'log_mood': {
+      const numMatch = msg.match(/\b([1-5])\b/);
+      const moodFromMsg = numMatch ? parseInt(numMatch[1]) : null;
+      if (!moodFromMsg) {
+        return {
+          role: 'assistant',
+          content: "Let's log your check-in! How's your mood today? Rate from 1 (terrible) to 5 (great).",
+          pendingIntent: { type: 'log_mood', step: 'awaiting_mood', collected: {} },
+        };
+      }
+      return {
+        role: 'assistant',
+        content: `Mood: ${moodFromMsg}/5. What's your energy level? Rate from 1 (exhausted) to 5 (energized).`,
+        pendingIntent: { type: 'log_mood', step: 'awaiting_energy', collected: { moodRating: moodFromMsg } },
+      };
+    }
+
+    // ── Write Journal ────────────────────────────────────────────
+    case 'write_journal': {
+      const titleFromMsg = extractTitle(msg.replace(/\b(write|create|new|add)\s+(a\s+)?(journal|diary)\s+(entry\s+)?(about|called|titled|on)?\b/gi, '').trim());
+      if (!titleFromMsg) {
+        return {
+          role: 'assistant',
+          content: "Let's write a journal entry! Give it a title (or say *skip* for no title).",
+          pendingIntent: { type: 'write_journal', step: 'awaiting_title', collected: {} },
+        };
+      }
+      return {
+        role: 'assistant',
+        content: `Journal entry: **"${titleFromMsg}"**. What would you like to write?`,
+        pendingIntent: { type: 'write_journal', step: 'awaiting_content', collected: { title: titleFromMsg } },
+      };
+    }
+
     // ── Show Summary ─────────────────────────────────────────────
     case 'show_summary': {
       try {
         const service = new AnalyticsService();
-        const s = service.getSummary(userId) as Record<string, unknown>;
+        const s = service.getSummary(userId) as unknown as Record<string, unknown>;
         const total = Number(s.totalTasks ?? 0);
         const done = Number(s.completedTasks ?? 0);
         const pending = Number(s.pendingTasks ?? s.todoTasks ?? 0);
@@ -742,24 +1217,30 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
         content:
           "Here's what I can do for you:\n\n" +
           "**Tasks**\n" +
-          "- *Create a task called Review PR*\n" +
-          "- *Delete task Review PR*\n" +
+          "- *Create a task called Review PR due tomorrow with high priority*\n" +
+          "- *Update task Review PR priority to urgent*\n" +
           "- *Mark task Review PR as done*\n" +
+          "- *Delete task Review PR*\n" +
           "- *Show my tasks*\n\n" +
           "**Projects**\n" +
           "- *Create a project called Website Redesign*\n" +
+          "- *Delete project Website Redesign*\n" +
           "- *Show my projects*\n\n" +
           "**Reminders**\n" +
           "- *Remind me to check emails at 3pm*\n" +
-          "- *Set a reminder for standup tomorrow at 9am*\n\n" +
+          "- *Delete reminder standup*\n" +
+          "- *Show my reminders*\n\n" +
           "**Time Tracking**\n" +
           "- *Start a timer for deep work*\n" +
           "- *Stop timer*\n\n" +
           "**Checklists**\n" +
-          "- *Create a checklist called Morning Routine*\n\n" +
+          "- *Create a checklist called Morning Routine*\n" +
+          "- *Add item Drink water to Morning Routine*\n\n" +
+          "**Mental Health**\n" +
+          "- *Log my mood* / *Check in*\n" +
+          "- *Write a journal entry*\n\n" +
           "**Analytics**\n" +
-          "- *How am I doing?* / *Show my stats*\n\n" +
-          "You can also provide details upfront like: *Create a high priority task called Fix Login Bug due tomorrow*",
+          "- *How am I doing?* / *Show my stats*",
         pendingIntent: null,
       };
     }
