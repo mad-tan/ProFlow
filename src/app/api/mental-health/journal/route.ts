@@ -1,11 +1,10 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { MentalHealthService } from '@/lib/services/mental-health.service';
 import { createJournalEntrySchema } from '@/lib/validators/mental-health.schema';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
 import type { CreateJournalEntryData } from '@/lib/repositories/mental-health.repository';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +24,7 @@ export async function GET(request: NextRequest) {
         : undefined,
     };
 
-    const entries = service.getJournalEntries(DEFAULT_USER_ID, options);
+    const entries = service.getJournalEntries(getCurrentUserId(), options);
     return successResponse(entries);
   } catch (error) {
     return errorResponse(error);
@@ -43,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entry = service.createJournalEntry({
-      userId: DEFAULT_USER_ID,
+      userId: getCurrentUserId(),
       ...parsed.data,
     } as CreateJournalEntryData);
 

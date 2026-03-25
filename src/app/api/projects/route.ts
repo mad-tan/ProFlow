@@ -1,10 +1,9 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { ProjectService } from '@/lib/services/project.service';
 import { createProjectSchema } from '@/lib/validators/project.schema';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
       includeArchived: searchParams.get('includeArchived') === 'true',
     };
 
-    const projects = service.listByUser(DEFAULT_USER_ID, filters);
+    const projects = service.listByUser(getCurrentUserId(), filters);
     return successResponse(projects);
   } catch (error) {
     return errorResponse(error);
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const project = service.create({
-      userId: DEFAULT_USER_ID,
+      userId: getCurrentUserId(),
       ...parsed.data,
     });
 

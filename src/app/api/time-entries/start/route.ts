@@ -1,8 +1,7 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { TimeTrackingService } from '@/lib/services/time-tracking.service';
 import { createdResponse, errorResponse } from '@/lib/utils/api-response';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +11,7 @@ export async function POST(request: NextRequest) {
     const taskId = body.taskId ?? undefined;
     const description = body.description ?? undefined;
 
-    const entry = service.startTimer(DEFAULT_USER_ID, taskId, description);
+    const entry = service.startTimer(getCurrentUserId(), taskId, description);
     return createdResponse(entry);
   } catch (error) {
     return errorResponse(error);

@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Menu, Search, Sun, Moon, Timer } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Menu, Search, Sun, Moon, Timer, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,6 +16,12 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function formatTime(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -28,6 +35,13 @@ export function Topbar() {
   const { setIsOpen } = useSidebar();
   const { theme, toggleTheme } = useTheme();
   const { activeTimer, elapsedSeconds, isRunning, stopTimer } = useTimer();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -108,13 +122,25 @@ export function Topbar() {
             </TooltipContent>
           </Tooltip>
 
-          {/* User avatar */}
-          <Avatar className="h-8 w-8 cursor-pointer">
-            <AvatarImage src="" alt="User" />
-            <AvatarFallback className="bg-indigo-600 text-white text-xs font-semibold">
-              TJ
-            </AvatarFallback>
-          </Avatar>
+          {/* User avatar with dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="outline-none">
+                <Avatar className="h-8 w-8 cursor-pointer">
+                  <AvatarImage src="" alt="User" />
+                  <AvatarFallback className="bg-indigo-600 text-white text-xs font-semibold">
+                    U
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400 cursor-pointer">
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
     </TooltipProvider>

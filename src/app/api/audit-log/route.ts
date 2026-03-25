@@ -1,8 +1,7 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { AuditLogService } from '@/lib/services/audit-log.service';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,7 +27,7 @@ export async function GET(request: NextRequest) {
       options.dateRange = { start: startDate, end: endDate };
     }
 
-    const result = service.findByUser(DEFAULT_USER_ID, options);
+    const result = service.findByUser(getCurrentUserId(), options);
     return successResponse(result);
   } catch (error) {
     return errorResponse(error);

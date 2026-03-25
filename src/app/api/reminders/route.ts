@@ -1,8 +1,7 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { ReminderService } from '@/lib/services/reminder.service';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
       options.taskId = searchParams.get('taskId');
     }
 
-    const reminders = service.listByUser(DEFAULT_USER_ID, options);
+    const reminders = service.listByUser(getCurrentUserId(), options);
     return successResponse(reminders);
   } catch (error) {
     return errorResponse(error);
@@ -30,7 +29,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const reminder = service.create({
-      userId: DEFAULT_USER_ID,
+      userId: getCurrentUserId(),
       taskId: body.taskId,
       title: body.title,
       description: body.description,

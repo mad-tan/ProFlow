@@ -5,6 +5,7 @@ import { SendHorizontal, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChatbot } from "@/lib/contexts/chatbot-context";
 import { cn } from "@/lib/utils";
+import { useSWRConfig } from "swr";
 
 interface ChatInputProps {
   externalValue?: string;
@@ -16,6 +17,7 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { addMessage } = useChatbot();
+  const { mutate } = useSWRConfig();
 
   // If an external value is provided (from suggestions), use it
   React.useEffect(() => {
@@ -25,6 +27,26 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
       inputRef.current?.focus();
     }
   }, [externalValue, onExternalValueUsed]);
+
+  const invalidateCaches = (actionType: string) => {
+    // Revalidate relevant SWR caches based on the action performed
+    const cacheMap: Record<string, string[]> = {
+      create_task: ['/api/tasks', '/api/analytics/summary'],
+      list_tasks: ['/api/tasks'],
+      create_project: ['/api/projects', '/api/analytics/summary'],
+      list_projects: ['/api/projects'],
+      set_reminder: ['/api/reminders'],
+      start_timer: ['/api/time-entries', '/api/time-entries/active'],
+      stop_timer: ['/api/time-entries', '/api/time-entries/active', '/api/analytics/summary'],
+      create_checklist: ['/api/checklists'],
+      show_summary: ['/api/analytics/summary'],
+    };
+
+    const keys = cacheMap[actionType] || [];
+    keys.forEach((key) => {
+      mutate((k: string) => typeof k === 'string' && k.startsWith(key), undefined, { revalidate: true });
+    });
+  };
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -43,11 +65,19 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
 
       if (!res.ok) throw new Error("Failed to get response");
 
-      const data = await res.json();
+      const json = await res.json();
+      // The API wraps response in successResponse: { success, data: { role, content, action } }
+      const data = json.data;
+
       addMessage({
         role: "assistant",
-        content: data.reply ?? data.message ?? "Sorry, I could not process that.",
+        content: data?.content ?? "Sorry, I could not process that.",
       });
+
+      // If an action was performed, invalidate relevant caches so UI updates
+      if (data?.action?.type) {
+        invalidateCaches(data.action.type);
+      }
     } catch {
       addMessage({
         role: "assistant",

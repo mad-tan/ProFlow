@@ -1,8 +1,7 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { AnalyticsService } from '@/lib/services/analytics.service';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +18,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = service.getProductivity(DEFAULT_USER_ID, { start, end });
+    const data = service.getProductivity(getCurrentUserId(), { start, end });
     return successResponse(data);
   } catch (error) {
     return errorResponse(error);

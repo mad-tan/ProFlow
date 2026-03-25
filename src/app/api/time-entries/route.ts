@@ -1,10 +1,9 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { TimeTrackingService } from '@/lib/services/time-tracking.service';
 import { createTimeEntrySchema } from '@/lib/validators/time-entry.schema';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
       taskId: searchParams.get('taskId') ?? undefined,
     };
 
-    const entries = service.listByUser(DEFAULT_USER_ID, filters);
+    const entries = service.listByUser(getCurrentUserId(), filters);
     return successResponse(entries);
   } catch (error) {
     return errorResponse(error);
@@ -35,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entry = service.createManualEntry({
-      userId: DEFAULT_USER_ID,
+      userId: getCurrentUserId(),
       taskId: parsed.data.taskId,
       description: parsed.data.description,
       startTime: parsed.data.startTime,

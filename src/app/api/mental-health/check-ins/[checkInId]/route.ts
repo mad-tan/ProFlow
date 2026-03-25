@@ -1,11 +1,10 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { MentalHealthService } from '@/lib/services/mental-health.service';
 import { updateMentalHealthCheckInSchema } from '@/lib/validators/mental-health.schema';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
 import type { MentalHealthCheckIn } from '@/lib/types';
-
-const DEFAULT_USER_ID = 'default-user';
 
 type RouteParams = { params: Promise<{ checkInId: string }> };
 

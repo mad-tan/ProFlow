@@ -1,8 +1,7 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { ChecklistService } from '@/lib/services/checklist.service';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,14 +10,14 @@ export async function GET(request: NextRequest) {
 
     const options: Record<string, unknown> = {};
     if (searchParams.get('isTemplate') === 'true') {
-      return successResponse(service.listTemplates(DEFAULT_USER_ID));
+      return successResponse(service.listTemplates(getCurrentUserId()));
     }
 
     if (searchParams.get('projectId')) {
       options.projectId = searchParams.get('projectId');
     }
 
-    const checklists = service.listByUser(DEFAULT_USER_ID, options);
+    const checklists = service.listByUser(getCurrentUserId(), options);
     return successResponse(checklists);
   } catch (error) {
     return errorResponse(error);
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const checklist = service.create({
-      userId: DEFAULT_USER_ID,
+      userId: getCurrentUserId(),
       title: body.title,
       description: body.description,
       isTemplate: body.isTemplate,

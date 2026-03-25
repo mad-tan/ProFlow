@@ -1,10 +1,9 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { TaskService } from '@/lib/services/task.service';
 import { createTaskSchema } from '@/lib/validators/task.schema';
 import { successResponse, createdResponse, errorResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,7 +18,7 @@ export async function GET(request: NextRequest) {
       dueDate: searchParams.get('dueDate') ?? undefined,
     };
 
-    const tasks = service.listByUser(DEFAULT_USER_ID, filters);
+    const tasks = service.listByUser(getCurrentUserId(), filters);
     return successResponse(tasks);
   } catch (error) {
     return errorResponse(error);
@@ -37,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const task = service.create({
-      userId: DEFAULT_USER_ID,
+      userId: getCurrentUserId(),
       ...parsed.data,
     });
 

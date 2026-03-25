@@ -1,8 +1,7 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { SearchService } from '@/lib/services/search.service';
 import { successResponse, errorResponse } from '@/lib/utils/api-response';
-
-const DEFAULT_USER_ID = 'default-user';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
       ? parseInt(searchParams.get('offset')!, 10)
       : undefined;
 
-    const results = service.search(DEFAULT_USER_ID, query, { limit, offset });
+    const results = service.search(getCurrentUserId(), query, { limit, offset });
     return successResponse(results);
   } catch (error) {
     return errorResponse(error);

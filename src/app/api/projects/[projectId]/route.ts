@@ -1,10 +1,9 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { ProjectService } from '@/lib/services/project.service';
 import { updateProjectSchema } from '@/lib/validators/project.schema';
 import { successResponse, errorResponse, noContentResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
-
-const DEFAULT_USER_ID = 'default-user';
 
 type RouteParams = { params: Promise<{ projectId: string }> };
 
@@ -30,7 +29,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw ValidationError.fromZodError(parsed.error);
     }
 
-    const project = service.update(projectId, DEFAULT_USER_ID, parsed.data);
+    const project = service.update(projectId, getCurrentUserId(), parsed.data);
     return successResponse(project);
   } catch (error) {
     return errorResponse(error);
@@ -41,7 +40,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new ProjectService();
     const { projectId } = await params;
-    service.delete(projectId, DEFAULT_USER_ID);
+    service.delete(projectId, getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

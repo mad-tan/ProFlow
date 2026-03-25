@@ -1,11 +1,10 @@
+import { getCurrentUserId } from '@/lib/auth';
 import { NextRequest } from 'next/server';
 import { MentalHealthService } from '@/lib/services/mental-health.service';
 import { updateJournalEntrySchema } from '@/lib/validators/mental-health.schema';
 import { successResponse, errorResponse, noContentResponse } from '@/lib/utils/api-response';
 import { ValidationError } from '@/lib/utils/errors';
 import type { JournalEntry } from '@/lib/types';
-
-const DEFAULT_USER_ID = 'default-user';
 
 type RouteParams = { params: Promise<{ entryId: string }> };
 
@@ -33,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const entry = service.updateJournalEntry(
       entryId,
-      DEFAULT_USER_ID,
+      getCurrentUserId(),
       parsed.data as Partial<Pick<JournalEntry, 'title' | 'content' | 'mood' | 'tags'>>
     );
     return successResponse(entry);
@@ -46,7 +45,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new MentalHealthService();
     const { entryId } = await params;
-    service.deleteJournalEntry(entryId, DEFAULT_USER_ID);
+    service.deleteJournalEntry(entryId, getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);
