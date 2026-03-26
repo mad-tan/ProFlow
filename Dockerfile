@@ -49,13 +49,11 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Create the data directory for SQLite and make it writable
-RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
+# Create the data directory for SQLite
+RUN mkdir -p /app/data
 
 # Set DATABASE_PATH to a writable location inside the container
 ENV DATABASE_PATH=/app/data/productivity.db
-
-USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
