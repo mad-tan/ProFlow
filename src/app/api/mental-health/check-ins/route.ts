@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const dateRange =
       startDate && endDate ? { start: startDate, end: endDate } : undefined;
 
-    const checkIns = service.getCheckIns(getCurrentUserId(), dateRange);
+    const checkIns = service.getCheckIns(await getCurrentUserId(), dateRange);
     return successResponse(checkIns);
   } catch (error) {
     return errorResponse(error);
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     const checkIn = service.createCheckIn({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       ...parsed.data,
     } as CreateCheckInData);
 

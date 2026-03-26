@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Clock, Timer } from "lucide-react";
 import { useTimeEntries, useActiveTimer } from "@/lib/hooks/use-time-tracking";
 import { PageHeader } from "@/components/layout/page-header";
@@ -52,6 +52,22 @@ export default function TimeTrackingPage() {
   const [endTime, setEndTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [timerDesc, setTimerDesc] = useState("");
+  const [elapsed, setElapsed] = useState("00:00");
+
+  useEffect(() => {
+    if (!activeTimer?.startTime) { setElapsed("00:00"); return; }
+    const tick = () => {
+      const diff = Math.floor((Date.now() - new Date(activeTimer.startTime).getTime()) / 1000);
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setElapsed(h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [activeTimer?.startTime]);
 
   const totalMinutes =
     timeEntries?.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0) ?? 0;
@@ -125,14 +141,7 @@ export default function TimeTrackingPage() {
                 Recording
               </div>
               <div className="text-5xl font-mono font-bold tabular-nums tracking-tight">
-                {(() => {
-                  const start = new Date(activeTimer.startTime).getTime();
-                  const now = Date.now();
-                  const diffMin = Math.floor((now - start) / 60000);
-                  const h = Math.floor(diffMin / 60);
-                  const m = diffMin % 60;
-                  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-                })()}
+                {elapsed}
               </div>
               {activeTimer.description && (
                 <p className="text-sm text-muted-foreground">

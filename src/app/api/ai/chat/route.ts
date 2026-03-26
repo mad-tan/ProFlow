@@ -9,6 +9,8 @@ import { ProjectService } from '@/lib/services/project.service';
 import { AnalyticsService } from '@/lib/services/analytics.service';
 import { MentalHealthService } from '@/lib/services/mental-health.service';
 import type { TaskPriority } from '@/lib/types';
+import { callLLM, callLLMStructured, isLLMEnabled } from '@/lib/ai/provider';
+import { z } from 'zod';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -261,6 +263,146 @@ function detectIntent(msg: string): IntentType {
   if (/\b(help|what can you do|commands|capabilities|features)\b/i.test(msg)) return 'help';
 
   return 'unknown';
+}
+
+// ─── LLM Integration ─────────────────────────────────────────────────────────
+
+const INTENT_VALUES = [
+  'create_task','delete_task','complete_task','list_tasks','update_task',
+  'create_project','list_projects','delete_project',
+  'set_reminder','list_reminders','delete_reminder',
+  'start_timer','stop_timer',
+  'create_checklist','add_checklist_item',
+  'log_mood','write_journal',
+  'show_summary','help','unknown',
+] as const;
+
+const intentSchema = z.object({
+  intent: z.enum(INTENT_VALUES),
+  confidence: z.number().min(0).max(1),
+});
+
+function buildSystemPrompt(userContext?: string): string {
+  return `You are ProFlow AI, an intelligent assistant built into ProFlow — a personal productivity platform.
+
+## ProFlow Capabilities
+ProFlow helps users manage their work and wellbeing with these features:
+
+### Tasks
+- Create tasks with title, due date, priority (urgent/high/medium/low), and status
+- Update task priority, due date, or status (todo/in_progress/in_review/done/cancelled/backlog)
+- Delete tasks (requires confirmation)
+- Mark tasks as complete
+- List all active tasks
+
+### Projects
+- Create projects with name and optional description
+- Delete projects (requires confirmation — also deletes associated tasks)
+- List all projects with status
+
+### Reminders
+- Set reminders with a title and time (absolute like "at 3pm" or relative like "in 2 hours")
+- Delete reminders
+- List upcoming reminders
+
+### Time Tracking
+- Start a timer (optionally with a description of what you're working on)
+- Stop the active timer (shows total time tracked)
+
+### Checklists
+- Create named checklists
+- Add items to existing checklists
+
+### Mental Health & Wellbeing
+- Log daily mood check-ins (mood 1-5, energy 1-5, stress 1-5, optional notes)
+- Write journal entries with optional title and content
+
+### Analytics & Productivity Insights
+- Show productivity summary (tasks completed, time tracked, pending count)
+- Full analytics available on the Analytics page
+
+## Tone & Behavior
+- Be concise, warm, and helpful
+- Use markdown for formatting (bold for emphasis, bullet lists)
+- When the user asks general questions about ProFlow, answer from the capability list above
+- When the user asks for advice on productivity or wellbeing, give thoughtful, practical suggestions based on their data if available
+- Always be encouraging and supportive about mental health topics
+
+${userContext ? `## Current User Data\n${userContext}` : ''}
+
+Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+}
+
+/**
+ * Use LLM to detect intent from a user message.
+ * Returns null on failure (triggers regex fallback).
+ */
+async function detectIntentWithLLM(msg: string): Promise<IntentType | null> {
+  if (!isLLMEnabled()) return null;
+  const system = `You are an intent classifier for ProFlow productivity app.
+Classify the user's message into exactly one of these intents:
+- create_task: user wants to create/add a new task or to-do
+- delete_task: user wants to delete/remove a task
+- complete_task: user wants to mark a task as done/complete/finished
+- list_tasks: user wants to see/show/list their tasks
+- update_task: user wants to update/edit/change/rename a task's priority, due date, or status
+- create_project: user wants to create/add a new project
+- delete_project: user wants to delete/remove a project
+- list_projects: user wants to see/list their projects
+- set_reminder: user wants to set/create/add a reminder or be reminded of something
+- delete_reminder: user wants to delete/remove a reminder
+- list_reminders: user wants to see/list their reminders
+- start_timer: user wants to start a timer or begin time tracking
+- stop_timer: user wants to stop/end/pause the timer
+- create_checklist: user wants to create/add a new checklist
+- add_checklist_item: user wants to add an item/step to a checklist
+- log_mood: user wants to log their mood, check in, or track their mental state
+- write_journal: user wants to write a journal entry, diary, or notes
+- show_summary: user wants to see stats, analytics, productivity summary, or how they're doing
+- help: user is asking what the assistant can do, asking for help, or asking about features
+- unknown: the message doesn't match any of the above (conversational, questions, unclear)
+
+Respond ONLY with valid JSON matching the schema: { "intent": "...", "confidence": 0.0-1.0 }`;
+
+  const result = await callLLMStructured(system, msg, intentSchema);
+  if (!result) return null;
+  return result.intent as IntentType;
+}
+
+/**
+ * Use LLM to respond to conversational/unknown messages with full app context.
+ * Returns null on failure (triggers fallback help response).
+ */
+async function handleConversationalWithLLM(
+  msg: string,
+  userId: string
+): Promise<ChatResponse | null> {
+  if (!isLLMEnabled()) return null;
+
+  // Build user context from real data
+  let userContext = '';
+  try {
+    const taskSvc = new TaskService();
+    const projSvc = new ProjectService();
+    const analyticsSvc = new AnalyticsService();
+    const tasks = taskSvc.listByUser(userId, {}) as Array<{ title: string; status: string; priority: string; dueDate?: string | null }>;
+    const projects = projSvc.listByUser(userId, {}) as Array<{ name: string; status: string }>;
+    const summary = analyticsSvc.getSummary(userId) as unknown as Record<string, unknown>;
+    const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'cancelled');
+    const urgentTasks = activeTasks.filter(t => t.priority === 'urgent' || t.priority === 'high');
+    userContext = [
+      `- Total tasks: ${tasks.length} (${activeTasks.length} active, ${tasks.filter(t=>t.status==='done').length} done)`,
+      urgentTasks.length > 0 ? `- High/urgent tasks: ${urgentTasks.map(t=>t.title).slice(0,5).join(', ')}` : '',
+      `- Projects: ${projects.length} (${projects.map(p=>p.name).slice(0,5).join(', ')})`,
+      `- Time tracked: ${Math.floor(Number(summary.totalTrackedMinutes??0)/60)}h ${Number(summary.totalTrackedMinutes??0)%60}m`,
+    ].filter(Boolean).join('\n');
+  } catch { /* ignore — proceed without user context */ }
+
+  const systemPrompt = buildSystemPrompt(userContext);
+  const response = await callLLM(systemPrompt, msg);
+  if (!response) return null;
+
+  return { role: 'assistant', content: response, pendingIntent: null };
 }
 
 // ─── Intent Handlers ─────────────────────────────────────────────────────────
@@ -1246,7 +1388,8 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
           "- *Log my mood* / *Check in*\n" +
           "- *Write a journal entry*\n\n" +
           "**Analytics**\n" +
-          "- *How am I doing?* / *Show my stats*",
+          "- *How am I doing?* / *Show my stats*\n\n" +
+          (isLLMEnabled() ? "*You can also ask me anything in natural language — I understand full sentences!*" : ""),
         pendingIntent: null,
       };
     }
@@ -1264,16 +1407,29 @@ export async function POST(request: NextRequest) {
       return errorResponse(new Error('"message" string is required'));
     }
 
-    const userId = getCurrentUserId();
+    const userId = await getCurrentUserId();
     let response: ChatResponse;
 
     if (pendingIntent) {
-      // Continue an existing conversation flow
+      // Continue an existing guided conversation flow — no LLM needed
       response = await handlePendingIntent(message, pendingIntent, userId);
     } else {
-      // Fresh message — detect intent
-      const intent = detectIntent(message);
-      response = await handleFreshIntent(message, intent, userId);
+      // Fresh message — try LLM intent detection first, fall back to regex
+      let intent: IntentType;
+      const llmIntent = await detectIntentWithLLM(message);
+      if (llmIntent) {
+        intent = llmIntent;
+      } else {
+        intent = detectIntent(message);
+      }
+
+      if (intent === 'unknown') {
+        // Use LLM for conversational/unknown messages with full app knowledge
+        const llmResponse = await handleConversationalWithLLM(message, userId);
+        response = llmResponse ?? await handleFreshIntent(message, 'help', userId);
+      } else {
+        response = await handleFreshIntent(message, intent, userId);
+      }
     }
 
     return successResponse(response);

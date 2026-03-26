@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
         : undefined,
     };
 
-    const entries = service.getJournalEntries(getCurrentUserId(), options);
+    const entries = service.getJournalEntries(await getCurrentUserId(), options);
     return successResponse(entries);
   } catch (error) {
     return errorResponse(error);
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entry = service.createJournalEntry({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       ...parsed.data,
     } as CreateJournalEntryData);
 

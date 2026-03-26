@@ -22,7 +22,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { checklistId } = await params;
     const body = await request.json();
 
-    const checklist = service.update(checklistId, getCurrentUserId(), {
+    const checklist = service.update(checklistId, await getCurrentUserId(), {
       title: body.title,
       description: body.description,
     });
@@ -37,7 +37,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new ChecklistService();
     const { checklistId } = await params;
-    service.delete(checklistId, getCurrentUserId());
+    service.delete(checklistId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

@@ -15,9 +15,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let project;
 
     if (existing.status === 'archived') {
-      project = service.unarchive(projectId, getCurrentUserId());
+      project = service.unarchive(projectId, await getCurrentUserId());
     } else {
-      project = service.archive(projectId, getCurrentUserId());
+      project = service.archive(projectId, await getCurrentUserId());
     }
 
     return successResponse(project);

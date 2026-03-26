@@ -22,7 +22,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { reminderId } = await params;
     const body = await request.json();
 
-    const reminder = service.update(reminderId, getCurrentUserId(), {
+    const reminder = service.update(reminderId, await getCurrentUserId(), {
       title: body.title,
       description: body.description,
       remindAt: body.remindAt,
@@ -41,7 +41,7 @@ export async function PATCH(_request: NextRequest, { params }: RouteParams) {
     const service = new ReminderService();
     const { reminderId } = await params;
 
-    const reminder = service.dismiss(reminderId, getCurrentUserId());
+    const reminder = service.dismiss(reminderId, await getCurrentUserId());
     return successResponse(reminder);
   } catch (error) {
     return errorResponse(error);
@@ -53,7 +53,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const service = new ReminderService();
     const { reminderId } = await params;
 
-    service.delete(reminderId, getCurrentUserId());
+    service.delete(reminderId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       ? parseInt(searchParams.get('offset')!, 10)
       : undefined;
 
-    const results = service.search(getCurrentUserId(), query, { limit, offset });
+    const results = service.search(await getCurrentUserId(), query, { limit, offset });
     return successResponse(results);
   } catch (error) {
     return errorResponse(error);

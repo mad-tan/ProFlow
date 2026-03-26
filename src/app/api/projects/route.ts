@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       includeArchived: searchParams.get('includeArchived') === 'true',
     };
 
-    const projects = service.listByUser(getCurrentUserId(), filters);
+    const projects = service.listByUser(await getCurrentUserId(), filters);
     return successResponse(projects);
   } catch (error) {
     return errorResponse(error);
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const project = service.create({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       ...parsed.data,
     });
 

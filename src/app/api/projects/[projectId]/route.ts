@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw ValidationError.fromZodError(parsed.error);
     }
 
-    const project = service.update(projectId, getCurrentUserId(), parsed.data);
+    const project = service.update(projectId, await getCurrentUserId(), parsed.data);
     return successResponse(project);
   } catch (error) {
     return errorResponse(error);
@@ -40,7 +40,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new ProjectService();
     const { projectId } = await params;
-    service.delete(projectId, getCurrentUserId());
+    service.delete(projectId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

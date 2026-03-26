@@ -10,14 +10,14 @@ export async function GET(request: NextRequest) {
 
     const options: Record<string, unknown> = {};
     if (searchParams.get('isTemplate') === 'true') {
-      return successResponse(service.listTemplates(getCurrentUserId()));
+      return successResponse(service.listTemplates(await getCurrentUserId()));
     }
 
     if (searchParams.get('projectId')) {
       options.projectId = searchParams.get('projectId');
     }
 
-    const checklists = service.listByUser(getCurrentUserId(), options);
+    const checklists = service.listByUser(await getCurrentUserId(), options);
     return successResponse(checklists);
   } catch (error) {
     return errorResponse(error);
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const checklist = service.create({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       title: body.title,
       description: body.description,
       isTemplate: body.isTemplate,

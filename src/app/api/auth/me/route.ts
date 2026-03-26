@@ -5,7 +5,7 @@ import crypto from 'crypto';
 
 export async function GET() {
   try {
-    const userId = getCurrentUserId();
+    const userId = await getCurrentUserId();
     const db = getDb();
     const user = db.prepare('SELECT id, email, name, avatar_url, timezone FROM users WHERE id = ?').get(userId) as {
       id: string; email: string; name: string; avatar_url: string | null; timezone: string;
@@ -23,7 +23,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const userId = getCurrentUserId();
+    const userId = await getCurrentUserId();
     const db = getDb();
     const body = await request.json();
     const { name, currentPassword, newPassword } = body;

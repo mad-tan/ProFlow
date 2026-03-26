@@ -18,7 +18,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw ValidationError.fromZodError(parsed.error);
     }
 
-    const entry = service.update(entryId, getCurrentUserId(), parsed.data);
+    const entry = service.update(entryId, await getCurrentUserId(), parsed.data);
     return successResponse(entry);
   } catch (error) {
     return errorResponse(error);
@@ -29,7 +29,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new TimeTrackingService();
     const { entryId } = await params;
-    service.delete(entryId, getCurrentUserId());
+    service.delete(entryId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

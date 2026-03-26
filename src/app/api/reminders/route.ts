@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       options.taskId = searchParams.get('taskId');
     }
 
-    const reminders = service.listByUser(getCurrentUserId(), options);
+    const reminders = service.listByUser(await getCurrentUserId(), options);
     return successResponse(reminders);
   } catch (error) {
     return errorResponse(error);
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const reminder = service.create({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       taskId: body.taskId,
       title: body.title,
       description: body.description,

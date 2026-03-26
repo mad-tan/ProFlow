@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       dueDate: searchParams.get('dueDate') ?? undefined,
     };
 
-    const tasks = service.listByUser(getCurrentUserId(), filters);
+    const tasks = service.listByUser(await getCurrentUserId(), filters);
     return successResponse(tasks);
   } catch (error) {
     return errorResponse(error);
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     const task = service.create({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       ...parsed.data,
     });
 

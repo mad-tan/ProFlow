@@ -36,7 +36,7 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addMessage, pendingIntent, setPendingIntent } = useChatbot();
+  const { addMessage, pendingIntent, setPendingIntent, isOpen } = useChatbot();
   const { startTimer: startTimerUI, stopTimer: stopTimerUI } = useTimer();
   const { mutate } = useSWRConfig();
 
@@ -47,6 +47,13 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
       inputRef.current?.focus();
     }
   }, [externalValue, onExternalValueUsed]);
+
+  // Auto-focus input whenever the chatbot opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, [isOpen]);
 
   const invalidateCaches = (actionType: string) => {
     const keys = CACHE_INVALIDATION_MAP[actionType] || [];

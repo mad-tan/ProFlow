@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = service.getMentalHealthTrends(getCurrentUserId(), { start, end });
+    const data = service.getMentalHealthTrends(await getCurrentUserId(), { start, end });
     return successResponse(data);
   } catch (error) {
     return errorResponse(error);

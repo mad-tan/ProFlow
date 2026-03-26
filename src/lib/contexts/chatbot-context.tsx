@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import type { PendingIntent } from "@/app/api/ai/chat/route";
 
 export type { PendingIntent };
@@ -48,6 +48,25 @@ export function ChatbotProvider({ children }: { children: React.ReactNode }) {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setPendingIntent(null);
+  }, []);
+
+  // Shift+C → open a fresh chatbot (ignore when typing in an input/textarea)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.shiftKey || e.key !== "C") return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement).isContentEditable) return;
+      setIsOpen((prev) => {
+        if (!prev) {
+          // Opening fresh — clear state
+          setMessages([]);
+          setPendingIntent(null);
+        }
+        return !prev;
+      });
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, []);
 
   return (

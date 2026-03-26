@@ -35,7 +35,8 @@ export class TimeEntryRepository extends BaseRepository<TimeEntry> {
 
     if (endDate) {
       clauses.push('te.start_time <= ?');
-      params.push(endDate);
+      // If date-only (YYYY-MM-DD), extend to end of day so ISO timestamps on that date are included
+      params.push(endDate.length === 10 ? `${endDate}T23:59:59.999Z` : endDate);
     }
 
     if (taskId) {
@@ -119,7 +120,8 @@ export class TimeEntryRepository extends BaseRepository<TimeEntry> {
         AND start_time <= ?
         AND duration_minutes IS NOT NULL
     `;
-    const row = this.db.prepare(sql).get(userId, startDate, endDate) as { total: number };
+    const end = endDate.length === 10 ? `${endDate}T23:59:59.999Z` : endDate;
+    const row = this.db.prepare(sql).get(userId, startDate, end) as { total: number };
     return row.total;
   }
 
@@ -138,9 +140,10 @@ export class TimeEntryRepository extends BaseRepository<TimeEntry> {
         AND te.start_time >= ?
         AND te.start_time <= ?
         AND te.duration_minutes IS NOT NULL
-      GROUP BY te.task_id
+      GROUP BY te.task_id, t.title
       ORDER BY total_minutes DESC
     `;
-    return this.query<DurationByTask>(sql, [userId, startDate, endDate]);
+    const end = endDate.length === 10 ? `${endDate}T23:59:59.999Z` : endDate;
+    return this.query<DurationByTask>(sql, [userId, startDate, end]);
   }
 }

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       taskId: searchParams.get('taskId') ?? undefined,
     };
 
-    const entries = service.listByUser(getCurrentUserId(), filters);
+    const entries = service.listByUser(await getCurrentUserId(), filters);
     return successResponse(entries);
   } catch (error) {
     return errorResponse(error);
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const entry = service.createManualEntry({
-      userId: getCurrentUserId(),
+      userId: await getCurrentUserId(),
       taskId: parsed.data.taskId,
       description: parsed.data.description,
       startTime: parsed.data.startTime,

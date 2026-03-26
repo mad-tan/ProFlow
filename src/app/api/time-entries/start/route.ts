@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const taskId = body.taskId ?? undefined;
     const description = body.description ?? undefined;
 
-    const entry = service.startTimer(getCurrentUserId(), taskId, description);
+    const entry = service.startTimer(await getCurrentUserId(), taskId, description);
     return createdResponse(entry);
   } catch (error) {
     return errorResponse(error);

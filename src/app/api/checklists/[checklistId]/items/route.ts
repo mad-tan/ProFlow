@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { checklistId } = await params;
     const body = await request.json();
 
-    const item = service.addItem(checklistId, getCurrentUserId(), body.title, body.sortOrder);
+    const item = service.addItem(checklistId, await getCurrentUserId(), body.title, body.sortOrder);
     return createdResponse(item);
   } catch (error) {
     return errorResponse(error);

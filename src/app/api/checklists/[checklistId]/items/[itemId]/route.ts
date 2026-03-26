@@ -11,7 +11,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const { itemId } = await params;
     const body = await request.json();
 
-    const item = service.updateItem(itemId, getCurrentUserId(), {
+    const item = service.updateItem(itemId, await getCurrentUserId(), {
       content: body.content,
       isCompleted: body.isCompleted,
       sortOrder: body.sortOrder,
@@ -28,7 +28,7 @@ export async function PATCH(_request: NextRequest, { params }: RouteParams) {
     const service = new ChecklistService();
     const { itemId } = await params;
 
-    const item = service.toggleItem(itemId, getCurrentUserId());
+    const item = service.toggleItem(itemId, await getCurrentUserId());
     return successResponse(item);
   } catch (error) {
     return errorResponse(error);
@@ -40,7 +40,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const service = new ChecklistService();
     const { itemId } = await params;
 
-    service.deleteItem(itemId, getCurrentUserId());
+    service.deleteItem(itemId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

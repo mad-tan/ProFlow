@@ -5,7 +5,7 @@ import { successResponse, errorResponse } from '@/lib/utils/api-response';
 export async function GET() {
   try {
     const service = new TimeTrackingService();
-    const active = service.getActiveTimer(getCurrentUserId());
+    const active = service.getActiveTimer(await getCurrentUserId());
     return successResponse(active ?? null);
   } catch (error) {
     return errorResponse(error);

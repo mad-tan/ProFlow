@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       throw ValidationError.fromZodError(parsed.error);
     }
 
-    const task = service.update(taskId, getCurrentUserId(), parsed.data);
+    const task = service.update(taskId, await getCurrentUserId(), parsed.data);
     return successResponse(task);
   } catch (error) {
     return errorResponse(error);
@@ -47,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       throw ValidationError.fromZodError(parsed.error);
     }
 
-    const task = service.update(taskId, getCurrentUserId(), parsed.data);
+    const task = service.update(taskId, await getCurrentUserId(), parsed.data);
     return successResponse(task);
   } catch (error) {
     return errorResponse(error);
@@ -58,7 +58,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new TaskService();
     const { taskId } = await params;
-    service.delete(taskId, getCurrentUserId());
+    service.delete(taskId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

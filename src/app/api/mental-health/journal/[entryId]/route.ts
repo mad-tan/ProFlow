@@ -32,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const entry = service.updateJournalEntry(
       entryId,
-      getCurrentUserId(),
+      await getCurrentUserId(),
       parsed.data as Partial<Pick<JournalEntry, 'title' | 'content' | 'mood' | 'tags'>>
     );
     return successResponse(entry);
@@ -45,7 +45,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
     const service = new MentalHealthService();
     const { entryId } = await params;
-    service.deleteJournalEntry(entryId, getCurrentUserId());
+    service.deleteJournalEntry(entryId, await getCurrentUserId());
     return noContentResponse();
   } catch (error) {
     return errorResponse(error);

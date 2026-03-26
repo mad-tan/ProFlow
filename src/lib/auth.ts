@@ -96,9 +96,9 @@ export function parseSessionToken(token: string): string | null {
   }
 }
 
-export function getCurrentUserId(): string {
+export async function getCurrentUserId(): Promise<string> {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const session = cookieStore.get(SESSION_COOKIE);
     if (session?.value) {
       const userId = parseSessionToken(session.value);

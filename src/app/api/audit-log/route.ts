@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       options.dateRange = { start: startDate, end: endDate };
     }
 
-    const result = service.findByUser(getCurrentUserId(), options as Parameters<typeof service.findByUser>[1]);
+    const result = service.findByUser(await getCurrentUserId(), options as Parameters<typeof service.findByUser>[1]);
     const totalPages = Math.ceil(result.total / pageSize);
 
     return successResponse({

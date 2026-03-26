@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '@/lib/utils/api-response';
 export async function GET(_request: NextRequest) {
   try {
     const service = new AnalyticsService();
-    const summary = service.getSummary(getCurrentUserId());
+    const summary = service.getSummary(await getCurrentUserId());
     return successResponse(summary);
   } catch (error) {
     return errorResponse(error);

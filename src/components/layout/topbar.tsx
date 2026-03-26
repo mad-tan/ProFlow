@@ -1,8 +1,9 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, Search, Sun, Moon, Timer, LogOut } from "lucide-react";
+import { SearchDialog } from "@/components/shared/search-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -36,6 +37,19 @@ export function Topbar() {
   const { theme, toggleTheme } = useTheme();
   const { activeTimer, elapsedSeconds, isRunning, stopTimer } = useTimer();
   const router = useRouter();
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Cmd+K / Ctrl+K opens search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -45,6 +59,7 @@ export function Topbar() {
 
   return (
     <TooltipProvider delayDuration={0}>
+      <SearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 lg:px-6">
         {/* Mobile menu button */}
         <Button
@@ -70,7 +85,7 @@ export function Topbar() {
           {/* Search trigger */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="outline" size="sm" className="hidden sm:flex gap-2 text-muted-foreground">
+              <Button variant="outline" size="sm" className="hidden sm:flex gap-2 text-muted-foreground" onClick={() => setSearchOpen(true)}>
                 <Search className="h-4 w-4" />
                 <span className="text-xs">Search...</span>
                 <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
@@ -81,7 +96,7 @@ export function Topbar() {
             <TooltipContent>Search (Cmd+K)</TooltipContent>
           </Tooltip>
 
-          <Button variant="ghost" size="icon" className="sm:hidden">
+          <Button variant="ghost" size="icon" className="sm:hidden" onClick={() => setSearchOpen(true)}>
             <Search className="h-5 w-5" />
           </Button>
 
