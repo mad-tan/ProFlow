@@ -405,6 +405,30 @@ async function handleConversationalWithLLM(
   return { role: 'assistant', content: response, pendingIntent: null };
 }
 
+// ─── Shared Task Creation ────────────────────────────────────────────────────
+
+function createTaskFromCollected(c: Record<string, unknown>, userId: string): ChatResponse {
+  try {
+    const service = new TaskService();
+    const task = service.create({
+      userId,
+      title: c.title as string,
+      priority: ((c.priority as string | undefined) ?? 'medium') as TaskPriority,
+      dueDate: (c.dueDate as string | undefined) ?? null,
+      projectId: (c.projectId as string | undefined) ?? null,
+      status: 'todo',
+      tags: [],
+    });
+    const parts = [`Done! ✓ Created task **"${c.title}"**`];
+    if (c.dueDate) parts.push(`due ${formatDate(c.dueDate as string)}`);
+    if (c.priority && c.priority !== 'medium') parts.push(`with **${c.priority}** priority`);
+    if (c.projectId) parts.push(`in project`);
+    return { role: 'assistant', content: parts.join(' ') + '. You can find it on the Tasks page.', action: { type: 'create_task', success: true, data: task }, pendingIntent: null };
+  } catch (err) {
+    return { role: 'assistant', content: `Sorry, couldn't create the task: ${err instanceof Error ? err.message : 'unknown error'}`, pendingIntent: null };
+  }
+}
+
 // ─── Intent Handlers ─────────────────────────────────────────────────────────
 
 async function handlePendingIntent(
@@ -452,29 +476,31 @@ async function handlePendingIntent(
       if (pending.step === 'awaiting_priority') {
         const priority = extractPriority(msg);
         if (priority && priority !== 'none') c.priority = priority;
-        // Now execute
-        try {
-          const service = new TaskService();
-          const task = service.create({
-            userId,
-            title: c.title as string,
-            priority: ((c.priority as string | undefined) ?? 'medium') as TaskPriority,
-            dueDate: (c.dueDate as string | undefined) ?? null,
-            status: 'todo',
-            tags: [],
-          });
-          const parts = [`Done! ✓ Created task **"${c.title}"**`];
-          if (c.dueDate) parts.push(`due ${formatDate(c.dueDate as string)}`);
-          if (c.priority && c.priority !== 'medium') parts.push(`with **${c.priority}** priority`);
-          return {
-            role: 'assistant',
-            content: parts.join(' ') + '. You can find it on the Tasks page.',
-            action: { type: 'create_task', success: true, data: task },
-            pendingIntent: null,
-          };
-        } catch (err) {
-          return { role: 'assistant', content: `Sorry, couldn't create the task: ${err instanceof Error ? err.message : 'unknown error'}`, pendingIntent: null };
+        // Ask for project
+        const projects = new ProjectService().listByUser(userId);
+        if (projects.length === 0) {
+          // No projects — skip straight to creation
+          return createTaskFromCollected(c, userId);
         }
+        const projectList = projects.map((p: { id: string; name: string }, i: number) => `**${i + 1}.** ${p.name}`).join(', ');
+        return {
+          role: 'assistant',
+          content: `Which project? ${projectList} — or say *no project*`,
+          pendingIntent: { type: 'create_task', step: 'awaiting_project', collected: { ...c, _projects: projects } },
+        };
+      }
+
+      if (pending.step === 'awaiting_project') {
+        const projects = (c._projects as { id: string; name: string }[]) ?? [];
+        if (!isSkip(msg)) {
+          const idx = parseInt(msg.trim()) - 1;
+          const byIndex = !isNaN(idx) && projects[idx];
+          const byName = projects.find(p => lower(p.name).includes(lower(msg.trim())));
+          const match = byIndex || byName;
+          if (match) c.projectId = match.id;
+        }
+        delete c._projects;
+        return createTaskFromCollected(c, userId);
       }
       break;
     }
@@ -927,17 +953,17 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
         };
       }
 
-      // Have everything — execute
-      try {
-        const service = new TaskService();
-        const task = service.create({ userId, title: titleFromMsg, priority: (priority !== 'none' ? priority : 'medium') as TaskPriority, dueDate: resolvedDue ?? null, status: 'todo', tags: [] });
-        const parts = [`Done! ✓ Created task **"${titleFromMsg}"**`];
-        if (resolvedDue) parts.push(`due ${formatDate(resolvedDue)}`);
-        if (priority && priority !== 'medium' && priority !== 'none') parts.push(`with **${priority}** priority`);
-        return { role: 'assistant', content: parts.join(' ') + '.', action: { type: 'create_task', success: true, data: task }, pendingIntent: null };
-      } catch (err) {
-        return { role: 'assistant', content: `Couldn't create the task: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+      // Have title + due date + priority — ask for project
+      const projects = new ProjectService().listByUser(userId);
+      if (projects.length === 0) {
+        return createTaskFromCollected({ title: titleFromMsg, priority: priority !== 'none' ? priority : undefined, dueDate: resolvedDue }, userId);
       }
+      const projectList = projects.map((p, i) => `**${i + 1}.** ${p.name}`).join(', ');
+      return {
+        role: 'assistant',
+        content: `Which project? ${projectList} — or say *no project*`,
+        pendingIntent: { type: 'create_task', step: 'awaiting_project', collected: { title: titleFromMsg, priority: priority !== 'none' ? priority : undefined, dueDate: resolvedDue, _projects: projects } },
+      };
     }
 
     // ── Delete Task ──────────────────────────────────────────────
