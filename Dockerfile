@@ -22,6 +22,7 @@ WORKDIR /app
 # Copy deps (already compiled for linux)
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p /app/public
 
 # Build the standalone Next.js output
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -46,7 +47,7 @@ RUN adduser --system --uid 1001 nextjs
 # Copy standalone output
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public 2>/dev/null || true
+COPY --from=builder /app/public ./public
 
 # Create the data directory for SQLite and make it writable
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
