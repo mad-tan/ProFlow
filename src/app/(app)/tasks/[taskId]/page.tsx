@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
+  FolderOpen,
   ListTodo,
   Save,
   Trash2,
@@ -13,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useTask } from "@/lib/hooks/use-tasks";
 import { useTimeEntries } from "@/lib/hooks/use-time-tracking";
+import { useProjects } from "@/lib/hooks/use-projects";
 import type { TaskStatus, TaskPriority } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -53,9 +55,9 @@ export default function TaskDetailPage() {
   const taskId = params.taskId as string;
 
   const { task, isLoading, updateTask, deleteTask } = useTask(taskId);
-  const { timeEntries, isLoading: timeLoading } = useTimeEntries({
-    taskId,
-  });
+  const { timeEntries, isLoading: timeLoading } = useTimeEntries({ taskId });
+  const { projects } = useProjects();
+  const project = task?.projectId ? projects?.find(p => p.id === task.projectId) : null;
 
   const [editTitle, setEditTitle] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState<string | null>(null);
@@ -337,6 +339,20 @@ export default function TaskDetailPage() {
                     <SelectItem value="none">None</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Project</Label>
+                {project ? (
+                  <div className="flex items-center gap-1.5 text-sm">
+                    <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>{project.name}</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No project</p>
+                )}
               </div>
 
               <Separator />

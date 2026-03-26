@@ -6,12 +6,12 @@ import type { Task, TaskStatus, TaskPriority, TaskDependency } from '@/lib/types
 
 /** Valid status transitions to prevent invalid state changes. */
 const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  backlog: ['todo', 'cancelled'],
-  todo: ['in_progress', 'cancelled'],
-  in_progress: ['in_review', 'done', 'todo', 'cancelled'],
-  in_review: ['done', 'in_progress', 'cancelled'],
-  done: ['todo', 'in_progress'],
-  cancelled: ['todo', 'backlog'],
+  backlog: ['todo', 'in_progress', 'done', 'cancelled'],
+  todo: ['in_progress', 'in_review', 'done', 'cancelled'],
+  in_progress: ['in_review', 'done', 'todo', 'backlog', 'cancelled'],
+  in_review: ['done', 'in_progress', 'todo', 'cancelled'],
+  done: ['todo', 'in_progress', 'backlog'],
+  cancelled: ['todo', 'backlog', 'in_progress'],
 };
 
 export interface CreateTaskInput {

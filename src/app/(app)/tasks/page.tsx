@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/hooks/use-tasks";
 import { useProjects } from "@/lib/hooks/use-projects";
 import type { TaskStatus, TaskPriority } from "@/lib/types";
+import type { TaskFilters } from "@/lib/hooks/use-tasks";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -81,14 +82,12 @@ export default function TasksPage() {
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
 
-  const filters: Record<string, string | undefined> = {};
-  if (statusFilter !== "all") filters.status = statusFilter;
-  if (priorityFilter !== "all") filters.priority = priorityFilter;
+  const filters: TaskFilters = {};
+  if (statusFilter !== "all") filters.status = statusFilter as TaskStatus;
+  if (priorityFilter !== "all") filters.priority = priorityFilter as TaskPriority;
   if (searchQuery) filters.search = searchQuery;
 
-  const { tasks, isLoading, createTask, updateTask } = useTasks(
-    filters as any
-  );
+  const { tasks, isLoading, createTask, updateTask } = useTasks(filters);
   const { projects } = useProjects();
 
   const allTasks = tasks ?? [];

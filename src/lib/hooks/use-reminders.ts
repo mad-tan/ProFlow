@@ -88,7 +88,7 @@ export function useReminders(filters?: ReminderFilters) {
 
     async dismissReminder(id: string): Promise<Reminder> {
       const dismissed = await apiPatch<Reminder>(
-        `/api/reminders/${id}/dismiss`,
+        `/api/reminders/${id}`,
         {}
       );
       await invalidateReminders();

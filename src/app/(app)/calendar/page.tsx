@@ -79,16 +79,20 @@ export default function CalendarPage() {
 
   const selectedTasks = useMemo(() => {
     if (!selectedDateKey || !tasks) return [];
-    return (tasks as any[]).filter(
-      (t: any) => t.dueDate && t.dueDate.startsWith(selectedDateKey)
-    );
+    return (tasks as any[]).filter((t: any) => {
+      if (!t.dueDate) return false;
+      const d = typeof t.dueDate === "string" ? t.dueDate : String(t.dueDate);
+      return d.startsWith(selectedDateKey);
+    });
   }, [tasks, selectedDateKey]);
 
   const selectedReminders = useMemo(() => {
     if (!selectedDateKey || !reminders) return [];
-    return (reminders as any[]).filter(
-      (r: any) => r.remindAt && r.remindAt.startsWith(selectedDateKey)
-    );
+    return (reminders as any[]).filter((r: any) => {
+      if (!r.remindAt) return false;
+      const d = typeof r.remindAt === "string" ? r.remindAt : String(r.remindAt);
+      return d.startsWith(selectedDateKey);
+    });
   }, [reminders, selectedDateKey]);
 
   return (

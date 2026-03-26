@@ -82,8 +82,8 @@ export function useActiveTimer() {
     "/api/time-entries/active",
     fetcher,
     {
-      // Poll for active timer every 30 seconds to keep UI in sync
-      refreshInterval: 30_000,
+      // Poll for active timer every 5 seconds to keep UI in sync
+      refreshInterval: 5_000,
     }
   );
 
