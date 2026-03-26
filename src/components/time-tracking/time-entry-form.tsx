@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTasks } from "@/lib/hooks/use-tasks";
-import { useTimeEntries } from "@/lib/hooks/use-time-tracking";
+import { useTimeEntries, type UpdateTimeEntryInput } from "@/lib/hooks/use-time-tracking";
 
 interface TimeEntryFormProps {
   entry?: any;
@@ -34,7 +34,7 @@ interface TimeEntryFormProps {
 export function TimeEntryForm({ entry, open: controlledOpen, onOpenChange, trigger }: TimeEntryFormProps) {
   const [open, setOpen] = useState(false);
   const { tasks } = useTasks();
-  const { createManualEntry } = useTimeEntries();
+  const { createManualEntry, updateEntry } = useTimeEntries();
 
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : open;
@@ -95,8 +95,11 @@ export function TimeEntryForm({ entry, open: controlledOpen, onOpenChange, trigg
       }
 
       if (isEditing) {
-        // TODO: update entry API not yet available
-        await createManualEntry(data);
+        const updateData: UpdateTimeEntryInput = {
+          taskId: taskId || undefined,
+          description: description || undefined,
+        };
+        await updateEntry(entry.id, updateData);
       } else {
         await createManualEntry(data);
       }

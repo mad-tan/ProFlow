@@ -2,6 +2,11 @@ import useSWR, { mutate } from "swr";
 import type { TimeEntry } from "@/lib/types";
 import { fetcher, apiPost, apiPut, apiDelete } from "./use-fetch";
 
+export interface UpdateTimeEntryInput {
+  description?: string;
+  taskId?: string | null;
+}
+
 // ─── Filter Types ───────────────────────────────────────────────────────────
 
 export interface TimeEntryFilters {
@@ -62,6 +67,12 @@ export function useTimeEntries(filters?: TimeEntryFilters) {
       const created = await apiPost<TimeEntry>("/api/time-entries", input);
       await invalidateTimeEntries();
       return created;
+    },
+
+    async updateEntry(id: string, input: UpdateTimeEntryInput): Promise<TimeEntry> {
+      const updated = await apiPut<TimeEntry>(`/api/time-entries/${id}`, input);
+      await invalidateTimeEntries();
+      return updated;
     },
   };
 }

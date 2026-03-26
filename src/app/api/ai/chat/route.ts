@@ -199,6 +199,12 @@ function isCancel(msg: string): boolean {
   return /\b(no|nope|cancel|nevermind|never mind|stop|abort|don't|dont)\b/i.test(msg);
 }
 
+/** Matches only explicit cancel commands — NOT "no", so users can say "no due date" etc. */
+function isExplicitCancel(msg: string): boolean {
+  return /\b(cancel|nevermind|never mind|abort|don't|dont)\b/i.test(msg) ||
+    /^nope$/i.test(msg.trim());
+}
+
 function isSkip(msg: string): boolean {
   return /\b(skip|none|no|not now|later|don't|dont|pass)\b/i.test(msg);
 }
@@ -266,8 +272,8 @@ async function handlePendingIntent(
 ): Promise<ChatResponse> {
   const l = lower(msg);
 
-  // Allow cancellation at any point
-  if (isCancel(msg) && !['awaiting_delete_confirm'].includes(pending.step)) {
+  // Allow explicit cancellation at any point except delete/reminder confirmation steps
+  if (isExplicitCancel(msg) && !['awaiting_confirmation'].includes(pending.step)) {
     return { role: 'assistant', content: "Okay, cancelled. Is there anything else I can help you with?", pendingIntent: null };
   }
 

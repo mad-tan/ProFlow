@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import {
   BarChart3,
   CheckCircle2,
@@ -8,10 +9,12 @@ import {
   Flame,
   Lightbulb,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSummary } from "@/lib/hooks/use-summary";
-import { useProductivity } from "@/lib/hooks/use-analytics";
+import { useProductivity, useMentalHealthTrends } from "@/lib/hooks/use-analytics";
+import type { DashboardSummary, ProductivityMetrics, MentalHealthTrends } from "@/lib/hooks/use-analytics";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,42 +36,141 @@ function getScoreBg(score: number): string {
   return "from-red-500/10 to-red-500/5 border-red-500/20";
 }
 
-const MOCK_INSIGHTS = [
-  {
-    icon: TrendingUp,
-    title: "Productivity Trend",
-    text: "Your task completion rate has increased by 15% compared to last week. Keep up the momentum!",
-  },
-  {
-    icon: Clock,
-    title: "Focus Time",
-    text: "You're most productive between 9 AM and 12 PM. Consider scheduling deep work during these hours.",
-  },
-  {
-    icon: Smile,
-    title: "Mood Correlation",
-    text: "Higher sleep hours correlate with better mood ratings. Aim for 7-8 hours of sleep consistently.",
-  },
-];
+interface Insight {
+  icon: React.ElementType;
+  title: string;
+  text: string;
+}
+
+function generateInsights(
+  summary: DashboardSummary | undefined,
+  productivity: ProductivityMetrics | undefined,
+  trends: MentalHealthTrends | undefined
+): Insight[] {
+  const insights: Insight[] = [];
+
+  if (!summary && !productivity && !trends) return insights;
+
+  // Task completion insight
+  if (productivity) {
+    const rate = productivity.tasksCreated > 0
+      ? Math.round((productivity.tasksCompleted / productivity.tasksCreated) * 100)
+      : 0;
+    if (rate >= 70) {
+      insights.push({
+        icon: TrendingUp,
+        title: "Strong Completion Rate",
+        text: `You've completed ${productivity.tasksCompleted} of ${productivity.tasksCreated} tasks (${rate}%) in this period. Excellent consistency!`,
+      });
+    } else if (productivity.tasksCreated > 0) {
+      insights.push({
+        icon: TrendingUp,
+        title: "Task Completion",
+        text: `You've completed ${productivity.tasksCompleted} of ${productivity.tasksCreated} tasks (${rate}%) so far. Try closing out smaller tasks first to build momentum.`,
+      });
+    }
+  }
+
+  // Time tracking insight
+  if (summary) {
+    const hoursToday = Math.round(summary.totalTimeToday / 60 * 10) / 10;
+    const hoursThisWeek = Math.round((productivity?.totalTimeTrackedMinutes ?? 0) / 60 * 10) / 10;
+    if (hoursToday >= 4) {
+      insights.push({
+        icon: Clock,
+        title: "Solid Focus Time",
+        text: `You've tracked ${hoursToday}h today and ${hoursThisWeek}h this period. Strong focus sessions — remember to take regular breaks.`,
+      });
+    } else if (hoursToday > 0) {
+      insights.push({
+        icon: Clock,
+        title: "Time Tracking",
+        text: `You've tracked ${hoursToday}h today. Consistent time tracking helps you understand where your energy goes and spot patterns.`,
+      });
+    } else {
+      insights.push({
+        icon: Clock,
+        title: "Start Tracking Time",
+        text: `No time tracked today yet. Use the timer to measure focus sessions — even 25-minute blocks add up significantly.`,
+      });
+    }
+  }
+
+  // Mood / mental health insight
+  if (trends && trends.averageMood > 0) {
+    const avgMood = Math.round(trends.averageMood * 10) / 10;
+    const avgEnergy = Math.round(trends.averageEnergy * 10) / 10;
+    const avgStress = Math.round(trends.averageStress * 10) / 10;
+    if (avgMood >= 4) {
+      insights.push({
+        icon: Smile,
+        title: "Positive Mood Trend",
+        text: `Your average mood is ${avgMood}/5 with energy at ${avgEnergy}/5. You're in a great headspace — a good time to tackle challenging work.`,
+      });
+    } else if (avgStress >= 4) {
+      insights.push({
+        icon: Smile,
+        title: "High Stress Detected",
+        text: `Your stress level is averaging ${avgStress}/5. Consider breaking large tasks into smaller steps and scheduling short recovery breaks.`,
+      });
+    } else if (avgMood > 0) {
+      insights.push({
+        icon: Smile,
+        title: "Wellbeing Check",
+        text: `Average mood: ${avgMood}/5, energy: ${avgEnergy}/5, stress: ${avgStress}/5. Keep logging daily check-ins to track your trends over time.`,
+      });
+    }
+  } else if (summary && summary.moodAverage > 0) {
+    insights.push({
+      icon: Smile,
+      title: "Mood Tracking",
+      text: `Your average mood is ${Math.round(summary.moodAverage * 10) / 10}/5. Log daily check-ins on the Mental Health page to build a fuller picture.`,
+    });
+  }
+
+  // Streak insight
+  if (summary && summary.currentStreak >= 3) {
+    insights.push({
+      icon: Flame,
+      title: `${summary.currentStreak}-Day Streak`,
+      text: `You've been active ${summary.currentStreak} days in a row. Consistency compounds — keep the streak alive!`,
+    });
+  }
+
+  // Overdue warning (from productivity top projects)
+  if (productivity?.topProjects && productivity.topProjects.length > 0) {
+    const topProject = productivity.topProjects[0];
+    insights.push({
+      icon: Zap,
+      title: "Top Project",
+      text: `Your most active project is **${topProject.projectName}** with ${topProject.tasksCompleted} tasks completed and ${Math.round(topProject.minutesTracked / 60 * 10) / 10}h tracked.`,
+    });
+  }
+
+  return insights.slice(0, 4);
+}
 
 export default function AnalyticsPage() {
   const { summary, isLoading: summaryLoading } = useSummary();
   const { productivity, isLoading: productivityLoading } = useProductivity();
+  const { trends, isLoading: trendsLoading } = useMentalHealthTrends();
 
-  const isLoading = summaryLoading || productivityLoading;
+  const isLoading = summaryLoading || productivityLoading || trendsLoading;
 
-  // Calculate a productivity score from available data
+  // Normalized productivity score (0-100):
+  // 50% = task completion rate, 30% = time tracked today (cap 8h), 20% = mood (cap 5)
   const score = summary
     ? Math.min(
         100,
         Math.round(
-          ((summary.completedToday ?? 0) * 10 +
-            (summary.currentStreak ?? 0) * 5 +
-            (summary.moodAverage ?? 3) * 8) /
-            1
+          (Math.min(summary.completedToday, 10) / 10) * 50 +
+          (Math.min(summary.totalTimeToday, 480) / 480) * 30 +
+          ((summary.moodAverage ?? 0) / 5) * 20
         )
       )
     : 0;
+
+  const insights = generateInsights(summary, productivity, trends);
 
   // Weekly task data for bar chart
   const weeklyData =
@@ -218,36 +320,42 @@ export default function AnalyticsPage() {
             </CardContent>
           </Card>
 
-          {/* AI Insights */}
+          {/* Insights */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Lightbulb className="h-4 w-4 text-amber-500" />
-                AI Insights
+                Insights
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {MOCK_INSIGHTS.map((insight, i) => {
-                  const Icon = insight.icon;
-                  return (
-                    <div
-                      key={i}
-                      className="flex gap-3 rounded-lg border p-4 bg-muted/30"
-                    >
-                      <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 shrink-0">
-                        <Icon className="h-4 w-4 text-primary" />
+              {insights.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Complete some tasks, track time, and log your mood to unlock personalized insights.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {insights.map((insight, i) => {
+                    const Icon = insight.icon;
+                    return (
+                      <div
+                        key={i}
+                        className="flex gap-3 rounded-lg border p-4 bg-muted/30"
+                      >
+                        <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 shrink-0">
+                          <Icon className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{insight.title}</p>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            {insight.text}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium">{insight.title}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          {insight.text}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </>
