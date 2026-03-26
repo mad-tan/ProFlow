@@ -31,6 +31,29 @@ interface ChatResponse {
 
 function lower(s: string) { return s.toLowerCase().trim(); }
 
+function cleanExtractedTitle(t: string): string {
+  return t
+    .replace(/\s+in\s+[\w][\w\s]*?project\b.*/i, '')
+    .replace(/\s+(?:due|by)\s+\S.*/i, '')
+    .replace(/\s+(?:urgent|high|medium|low)\s*$/i, '')
+    .replace(/\s+with\s+(?:urgent|high|medium|low)\s+priority.*/i, '')
+    .trim();
+}
+
+function extractProjectFromMessage(msg: string, projects: Array<{id: string; name: string}>): string | undefined {
+  if (!projects.length) return undefined;
+  const inMatch = msg.match(/\bin\s+([a-zA-Z0-9\s]+?)\s+project\b/i);
+  if (inMatch) {
+    const nameInMsg = lower(inMatch[1]);
+    const found = projects.find(p => lower(p.name).includes(nameInMsg) || nameInMsg.includes(lower(p.name)));
+    if (found) return found.id;
+  }
+  for (const p of projects) {
+    if (lower(msg).includes(lower(p.name))) return p.id;
+  }
+  return undefined;
+}
+
 function extractTitle(msg: string): string | null {
   const patterns = [
     /(?:called|named|titled)\s+["']?([^"'\n]+?)["']?\s*$/i,
@@ -39,7 +62,7 @@ function extractTitle(msg: string): string | null {
   ];
   for (const p of patterns) {
     const m = msg.match(p);
-    if (m?.[1] && m[1].trim().length > 1) return m[1].trim().replace(/["']+$/, '').trim();
+    if (m?.[1] && m[1].trim().length > 1) return cleanExtractedTitle(m[1].trim().replace(/["']+$/, '').trim());
   }
   // Strip intent keywords and see what remains as the title
   const stripped = msg
@@ -282,6 +305,27 @@ const intentSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
+const parsedRequestSchema = z.object({
+  intent: z.enum(INTENT_VALUES),
+  confidence: z.number().min(0).max(1),
+  title: z.string().nullable().optional(),
+  dueDate: z.string().nullable().optional(),
+  priority: z.enum(['urgent', 'high', 'medium', 'low', 'none']).nullable().optional(),
+  projectName: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  reminderTime: z.string().nullable().optional(),
+  moodRating: z.number().int().min(1).max(5).nullable().optional(),
+  energyLevel: z.number().int().min(1).max(5).nullable().optional(),
+  stressLevel: z.number().int().min(1).max(5).nullable().optional(),
+  notes: z.string().nullable().optional(),
+  content: z.string().nullable().optional(),
+  timerDescription: z.string().nullable().optional(),
+  itemName: z.string().nullable().optional(),
+  checklistName: z.string().nullable().optional(),
+});
+
+type ParsedRequest = z.infer<typeof parsedRequestSchema>;
+
 function buildSystemPrompt(userContext?: string): string {
   return `You are ProFlow AI, an intelligent assistant built into ProFlow — a personal productivity platform.
 
@@ -334,39 +378,52 @@ Today's date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 
 }
 
 /**
- * Use LLM to detect intent from a user message.
+ * Use LLM to detect intent AND extract all entities from a user message in one call.
  * Returns null on failure (triggers regex fallback).
  */
-async function detectIntentWithLLM(msg: string): Promise<IntentType | null> {
+async function parseRequestWithLLM(msg: string): Promise<ParsedRequest | null> {
   if (!isLLMEnabled()) return null;
-  const system = `You are an intent classifier for ProFlow productivity app.
-Classify the user's message into exactly one of these intents:
-- create_task: user wants to create/add a new task or to-do
-- delete_task: user wants to delete/remove a task
-- complete_task: user wants to mark a task as done/complete/finished
-- list_tasks: user wants to see/show/list their tasks
-- update_task: user wants to update/edit/change/rename a task's priority, due date, or status
-- create_project: user wants to create/add a new project
-- delete_project: user wants to delete/remove a project
-- list_projects: user wants to see/list their projects
-- set_reminder: user wants to set/create/add a reminder or be reminded of something
-- delete_reminder: user wants to delete/remove a reminder
-- list_reminders: user wants to see/list their reminders
-- start_timer: user wants to start a timer or begin time tracking
-- stop_timer: user wants to stop/end/pause the timer
-- create_checklist: user wants to create/add a new checklist
-- add_checklist_item: user wants to add an item/step to a checklist
-- log_mood: user wants to log their mood, check in, or track their mental state
-- write_journal: user wants to write a journal entry, diary, or notes
-- show_summary: user wants to see stats, analytics, productivity summary, or how they're doing
-- help: user is asking what the assistant can do, asking for help, or asking about features
-- unknown: the message doesn't match any of the above (conversational, questions, unclear)
+  const today = new Date();
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
+  const todayStr = today.toISOString().split('T')[0];
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const nextWeekStr = nextWeek.toISOString().split('T')[0];
 
-Respond ONLY with valid JSON matching the schema: { "intent": "...", "confidence": 0.0-1.0 }`;
+  const system = `You are an intent classifier and entity extractor for ProFlow productivity app.
+Classify the user message into exactly one intent AND extract all relevant entities.
 
-  const result = await callLLMStructured(system, msg, intentSchema);
-  if (!result) return null;
-  return result.intent as IntentType;
+INTENTS:
+- create_task, delete_task, complete_task, list_tasks, update_task
+- create_project, delete_project, list_projects
+- set_reminder, delete_reminder, list_reminders
+- start_timer, stop_timer
+- create_checklist, add_checklist_item
+- log_mood, write_journal
+- show_summary, help
+- unknown (conversational/unclear)
+
+ENTITY EXTRACTION RULES:
+- title: name/title of task, project, reminder, checklist, or journal entry
+- dueDate: YYYY-MM-DD. Today=${todayStr}, Tomorrow=${tomorrowStr}, Next week=${nextWeekStr}
+- priority: urgent | high | medium | low | none
+- projectName: project name from phrases like "in X project" or "under X"
+- description: description text for a project or content after "with description", ":", "-"
+- reminderTime: ISO 8601 datetime (e.g. today + specified time for "at 3pm")
+- moodRating: number 1-5 for mood level
+- energyLevel: number 1-5 for energy level
+- stressLevel: number 1-5 for stress level
+- notes: any extra notes for mood/journal
+- content: body text for journal entries
+- timerDescription: what the timer is tracking (e.g. "deep work", "meeting")
+- itemName: checklist item to add
+- checklistName: which checklist to add item to
+
+Only extract entities clearly present in the message. Use null for anything not mentioned.
+Respond with valid JSON only.`;
+
+  const result = await callLLMStructured(system, msg, parsedRequestSchema);
+  return result ?? null;
 }
 
 /**
@@ -916,15 +973,15 @@ async function handlePendingIntent(
   return { role: 'assistant', content: "I'm not sure what you mean. Type *cancel* to start over.", pendingIntent: pending };
 }
 
-async function handleFreshIntent(msg: string, intent: IntentType, userId: string): Promise<ChatResponse> {
+async function handleFreshIntent(msg: string, intent: IntentType, userId: string, parsed?: ParsedRequest | null): Promise<ChatResponse> {
 
   switch (intent) {
 
     // ── Create Task ──────────────────────────────────────────────
     case 'create_task': {
-      const titleFromMsg = extractTitle(msg.replace(/\b(create|add|new|make)\s+(a\s+)?task\b/gi, '').trim());
-      const priority = extractPriority(msg);
-      const dueDate = extractDueDate(msg);
+      const titleFromMsg = parsed?.title || extractTitle(msg.replace(/\b(create|add|new|make)\s+(a\s+)?task\b/gi, '').trim());
+      const priority = parsed?.priority || extractPriority(msg);
+      const dueDate = parsed?.dueDate || extractDueDate(msg);
 
       if (!titleFromMsg) {
         return {
@@ -953,8 +1010,14 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
         };
       }
 
-      // Have title + due date + priority — ask for project
+      // Have title + due date + priority — check if project was already mentioned
       const projects = new ProjectService().listByUser(userId);
+      const projectIdFromMsg = (parsed?.projectName
+        ? projects.find(p => lower(p.name).includes(lower(parsed.projectName!)) || lower(parsed.projectName!).includes(lower(p.name)))?.id
+        : undefined) || extractProjectFromMessage(msg, projects);
+      if (projectIdFromMsg) {
+        return createTaskFromCollected({ title: titleFromMsg, priority: priority !== 'none' ? priority : undefined, dueDate: resolvedDue, projectId: projectIdFromMsg }, userId);
+      }
       if (projects.length === 0) {
         return createTaskFromCollected({ title: titleFromMsg, priority: priority !== 'none' ? priority : undefined, dueDate: resolvedDue }, userId);
       }
@@ -968,7 +1031,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Delete Task ──────────────────────────────────────────────
     case 'delete_task': {
-      const nameFromMsg = extractTitle(msg.replace(/\b(delete|remove|trash)\s+(the\s+)?task\b/gi, '').trim());
+      const nameFromMsg = parsed?.title || extractTitle(msg.replace(/\b(delete|remove|trash)\s+(the\s+)?task\b/gi, '').trim());
       if (!nameFromMsg) {
         return {
           role: 'assistant',
@@ -993,7 +1056,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Complete Task ────────────────────────────────────────────
     case 'complete_task': {
-      const nameFromMsg = extractTitle(msg.replace(/\b(complete|finish|done|mark|close)\s+(the\s+)?(task\s+)?/gi, '').trim());
+      const nameFromMsg = parsed?.title || extractTitle(msg.replace(/\b(complete|finish|done|mark|close)\s+(the\s+)?(task\s+)?/gi, '').trim());
       if (!nameFromMsg) {
         return {
           role: 'assistant',
@@ -1038,13 +1101,22 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Create Project ───────────────────────────────────────────
     case 'create_project': {
-      const nameFromMsg = extractTitle(msg.replace(/\b(create|add|new|make)\s+(a\s+)?project\b/gi, '').trim());
+      const nameFromMsg = parsed?.title || extractTitle(msg.replace(/\b(create|add|new|make)\s+(a\s+)?project\b/gi, '').trim());
       if (!nameFromMsg) {
         return {
           role: 'assistant',
           content: "Sure! What should the project be called?",
           pendingIntent: { type: 'create_project', step: 'awaiting_name', collected: {} },
         };
+      }
+      // If description was provided in the message, create immediately
+      if (parsed?.description !== undefined && parsed.description !== null) {
+        try {
+          const project = new ProjectService().create({ userId, name: nameFromMsg, description: parsed.description || undefined, status: 'active' });
+          return { role: 'assistant', content: `Done! ✓ Created project **"${nameFromMsg}"**. You can find it on the Projects page.`, action: { type: 'create_project', success: true, data: project }, pendingIntent: null };
+        } catch (err) {
+          return { role: 'assistant', content: `Couldn't create the project: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
       }
       return {
         role: 'assistant',
@@ -1067,8 +1139,8 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
     // ── Set Reminder ─────────────────────────────────────────────
     case 'set_reminder': {
       const stripped = msg.replace(/\b(set|create|add)?\s*(a\s+)?reminder\b/gi, '').replace(/\b(remind\s+me)\b/gi, '').trim();
-      const titleFromMsg = extractTitle(stripped.replace(/\b(to|about|for)\b/gi, '').replace(/\b(at|in|on|by|tomorrow|tonight|today|next|this)\s+.*/gi, '').trim());
-      const timeFromMsg = extractReminderTime(msg);
+      const titleFromMsg = parsed?.title || extractTitle(stripped.replace(/\b(to|about|for)\b/gi, '').replace(/\b(at|in|on|by|tomorrow|tonight|today|next|this)\s+.*/gi, '').trim());
+      const timeFromMsg = parsed?.reminderTime || extractReminderTime(msg);
 
       if (!titleFromMsg) {
         return {
@@ -1112,7 +1184,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
     // ── Start Timer ──────────────────────────────────────────────
     case 'start_timer': {
       const descMatch = msg.match(/(?:for|on|tracking)\s+["']?(.+?)["']?\s*$/i);
-      const description = descMatch ? descMatch[1].trim() : undefined;
+      const description = parsed?.timerDescription || (descMatch ? descMatch[1].trim() : undefined);
       try {
         const service = new TimeTrackingService();
         const entry = service.startTimer(userId, undefined, description);
@@ -1155,7 +1227,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Create Checklist ─────────────────────────────────────────
     case 'create_checklist': {
-      const titleFromMsg = extractTitle(msg.replace(/\b(create|add|new|make)\s+(a\s+)?checklist\b/gi, '').trim());
+      const titleFromMsg = parsed?.title || extractTitle(msg.replace(/\b(create|add|new|make)\s+(a\s+)?checklist\b/gi, '').trim());
       if (!titleFromMsg) {
         return {
           role: 'assistant',
@@ -1179,9 +1251,9 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Update Task ──────────────────────────────────────────────
     case 'update_task': {
-      const nameFromMsg = extractTitle(msg.replace(/\b(update|edit|change|modify|rename|set|move)\s+(the\s+)?(task\s+)?/gi, '').trim());
-      const priority = extractPriority(msg);
-      const dueDate = extractDueDate(msg);
+      const nameFromMsg = parsed?.title || extractTitle(msg.replace(/\b(update|edit|change|modify|rename|set|move)\s+(the\s+)?(task\s+)?/gi, '').trim());
+      const priority = parsed?.priority || extractPriority(msg);
+      const dueDate = parsed?.dueDate || extractDueDate(msg);
       const status = extractStatus(msg);
       const hasChange = priority || dueDate || status;
 
@@ -1229,7 +1301,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Delete Project ───────────────────────────────────────────
     case 'delete_project': {
-      const nameFromMsg = extractTitle(msg.replace(/\b(delete|remove|trash)\s+(the\s+)?project\b/gi, '').trim());
+      const nameFromMsg = parsed?.title || extractTitle(msg.replace(/\b(delete|remove|trash)\s+(the\s+)?project\b/gi, '').trim());
       if (!nameFromMsg) {
         return {
           role: 'assistant',
@@ -1254,7 +1326,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Delete Reminder ──────────────────────────────────────────
     case 'delete_reminder': {
-      const nameFromMsg = extractTitle(msg.replace(/\b(delete|remove)\s+(the\s+)?reminder\b/gi, '').trim());
+      const nameFromMsg = parsed?.title || extractTitle(msg.replace(/\b(delete|remove)\s+(the\s+)?reminder\b/gi, '').trim());
       if (!nameFromMsg) {
         return {
           role: 'assistant',
@@ -1281,8 +1353,8 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
     case 'add_checklist_item': {
       // Try to extract checklist name from the message
       const itemMatch = msg.match(/\badd\s+(?:item\s+)?["']?([^"']+?)["']?\s+(?:to|in)\s+(?:checklist\s+)?["']?([^"']+?)["']?\s*$/i);
-      const checklistNameFromMsg = itemMatch ? itemMatch[2].trim() : extractTitle(msg.replace(/\badd\b.*(item|to|in|checklist)\b/gi, '').trim());
-      const itemNameFromMsg = itemMatch ? itemMatch[1].trim() : null;
+      const checklistNameFromMsg = parsed?.checklistName || (itemMatch ? itemMatch[2].trim() : extractTitle(msg.replace(/\badd\b.*(item|to|in|checklist)\b/gi, '').trim()));
+      const itemNameFromMsg = parsed?.itemName || (itemMatch ? itemMatch[1].trim() : null);
 
       if (!checklistNameFromMsg) {
         return {
@@ -1323,7 +1395,33 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
     // ── Log Mood ─────────────────────────────────────────────────
     case 'log_mood': {
       const numMatch = msg.match(/\b([1-5])\b/);
-      const moodFromMsg = numMatch ? parseInt(numMatch[1]) : null;
+      const moodFromMsg = parsed?.moodRating ?? (numMatch ? parseInt(numMatch[1]) : null);
+      const energyFromMsg = parsed?.energyLevel ?? null;
+      const stressFromMsg = parsed?.stressLevel ?? null;
+      const notesFromMsg = parsed?.notes ?? null;
+
+      // If LLM extracted all three ratings, log immediately
+      if (moodFromMsg && energyFromMsg && stressFromMsg) {
+        try {
+          const service = new MentalHealthService();
+          const today2 = new Date().toISOString().split('T')[0];
+          const checkIn = service.createCheckIn({
+            userId,
+            date: today2,
+            moodRating: moodFromMsg as 1|2|3|4|5,
+            energyLevel: energyFromMsg as 1|2|3|4|5,
+            stressLevel: stressFromMsg as 1|2|3|4|5,
+            notes: notesFromMsg ?? undefined,
+          });
+          const moodLabels = ['', 'Terrible', 'Bad', 'Okay', 'Good', 'Great'];
+          return { role: 'assistant', content: `Done! ✓ Check-in logged — mood: **${moodLabels[moodFromMsg]}** (${moodFromMsg}/5), energy: ${energyFromMsg}/5, stress: ${stressFromMsg}/5.`, action: { type: 'log_mood', success: true, data: checkIn }, pendingIntent: null };
+        } catch (err) {
+          const m2 = err instanceof Error ? err.message : 'error';
+          if (m2.toLowerCase().includes('already')) return { role: 'assistant', content: "You've already logged a check-in today! You can edit it on the Mental Health page.", pendingIntent: null };
+          return { role: 'assistant', content: `Couldn't save check-in: ${m2}`, pendingIntent: null };
+        }
+      }
+
       if (!moodFromMsg) {
         return {
           role: 'assistant',
@@ -1340,7 +1438,20 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 
     // ── Write Journal ────────────────────────────────────────────
     case 'write_journal': {
-      const titleFromMsg = extractTitle(msg.replace(/\b(write|create|new|add)\s+(a\s+)?(journal|diary)\s+(entry\s+)?(about|called|titled|on)?\b/gi, '').trim());
+      const titleFromMsg = parsed?.title || extractTitle(msg.replace(/\b(write|create|new|add)\s+(a\s+)?(journal|diary)\s+(entry\s+)?(about|called|titled|on)?\b/gi, '').trim());
+      const contentFromMsg = parsed?.content ?? null;
+
+      // If content was provided in the message, save immediately
+      if (contentFromMsg) {
+        try {
+          const service = new MentalHealthService();
+          const entry = service.createJournalEntry({ userId, title: titleFromMsg ?? undefined, content: contentFromMsg });
+          return { role: 'assistant', content: `Done! ✓ Journal entry saved${titleFromMsg ? ` — **"${titleFromMsg}"**` : ''}.`, action: { type: 'write_journal', success: true, data: entry }, pendingIntent: null };
+        } catch (err) {
+          return { role: 'assistant', content: `Couldn't save journal entry: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
+      }
+
       if (!titleFromMsg) {
         return {
           role: 'assistant',
@@ -1440,11 +1551,13 @@ export async function POST(request: NextRequest) {
       // Continue an existing guided conversation flow — no LLM needed
       response = await handlePendingIntent(message, pendingIntent, userId);
     } else {
-      // Fresh message — try LLM intent detection first, fall back to regex
+      // Fresh message — try LLM parse (intent + entities) first, fall back to regex
       let intent: IntentType;
-      const llmIntent = await detectIntentWithLLM(message);
-      if (llmIntent) {
-        intent = llmIntent;
+      let parsed: ParsedRequest | null = null;
+      const llmParsed = await parseRequestWithLLM(message);
+      if (llmParsed) {
+        parsed = llmParsed;
+        intent = llmParsed.intent;
       } else {
         intent = detectIntent(message);
       }
@@ -1452,9 +1565,9 @@ export async function POST(request: NextRequest) {
       if (intent === 'unknown') {
         // Use LLM for conversational/unknown messages with full app knowledge
         const llmResponse = await handleConversationalWithLLM(message, userId);
-        response = llmResponse ?? await handleFreshIntent(message, 'help', userId);
+        response = llmResponse ?? await handleFreshIntent(message, 'help', userId, parsed);
       } else {
-        response = await handleFreshIntent(message, intent, userId);
+        response = await handleFreshIntent(message, intent, userId, parsed);
       }
     }
 
