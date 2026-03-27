@@ -33,9 +33,13 @@ export function ChatPanel() {
   return (
     <div
       className={cn(
-        "fixed bottom-24 right-6 z-50 flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-2xl shadow-black/10",
-        "w-[400px] h-[600px]",
-        "dark:border-gray-700/80 dark:bg-gray-900 dark:shadow-black/30",
+        "fixed z-50 flex flex-col overflow-hidden bg-white",
+        "dark:bg-gray-900",
+        // Mobile: full screen
+        "inset-0 rounded-none border-0",
+        // Desktop: floating panel
+        "sm:inset-auto sm:bottom-24 sm:right-6 sm:w-[400px] sm:h-[600px] sm:rounded-2xl sm:border sm:border-gray-200/80 sm:shadow-2xl sm:shadow-black/10",
+        "dark:sm:border-gray-700/80 dark:sm:shadow-black/30",
         "transition-all duration-300 ease-out",
         isOpen
           ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
