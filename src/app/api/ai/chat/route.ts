@@ -8,6 +8,7 @@ import { ChecklistService } from '@/lib/services/checklist.service';
 import { ProjectService } from '@/lib/services/project.service';
 import { AnalyticsService } from '@/lib/services/analytics.service';
 import { MentalHealthService } from '@/lib/services/mental-health.service';
+import { NoteService } from '@/lib/services/note.service';
 import type { TaskPriority } from '@/lib/types';
 import { callLLM, callLLMStructured, isLLMEnabled } from '@/lib/ai/provider';
 import { z } from 'zod';
@@ -30,6 +31,11 @@ interface ChatResponse {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function lower(s: string) { return s.toLowerCase().trim(); }
+
+/** Returns a YYYY-MM-DD string in LOCAL time, not UTC. */
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 function cleanExtractedTitle(t: string): string {
   return t
@@ -78,24 +84,24 @@ function extractDueDate(msg: string): string | null {
   const l = lower(msg);
   const now = new Date();
   if (/\bno deadline\b|\bno due date\b|\bskip\b|\bnone\b|\bno\b/.test(l)) return 'none';
-  if (/\btoday\b/.test(l)) return now.toISOString().split('T')[0];
+  if (/\btoday\b/.test(l)) return localDateStr(now);
   if (/\btomorrow\b/.test(l)) {
     const d = new Date(now); d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   }
   if (/\bnext week\b/.test(l)) {
     const d = new Date(now); d.setDate(d.getDate() + 7);
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   }
   if (/\bnext month\b/.test(l)) {
     const d = new Date(now); d.setMonth(d.getMonth() + 1);
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   }
   // "in X days"
   const inDays = l.match(/in\s+(\d+)\s+days?/);
   if (inDays) {
     const d = new Date(now); d.setDate(d.getDate() + parseInt(inDays[1]));
-    return d.toISOString().split('T')[0];
+    return localDateStr(d);
   }
   // explicit date pattern like "march 15", "15th march", "3/15", "2024-03-15"
   const explicit = msg.match(/\b(\d{4}-\d{2}-\d{2})\b/);
@@ -103,7 +109,7 @@ function extractDueDate(msg: string): string | null {
   const monthDay = msg.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})/i);
   if (monthDay) {
     const d = new Date(`${monthDay[0]} ${now.getFullYear()}`);
-    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    if (!isNaN(d.getTime())) return localDateStr(d);
   }
   return null;
 }
@@ -247,6 +253,7 @@ type IntentType =
   | 'start_timer' | 'stop_timer'
   | 'create_checklist' | 'add_checklist_item'
   | 'log_mood' | 'write_journal'
+  | 'create_note' | 'list_notes' | 'delete_note'
   | 'show_summary'
   | 'help' | 'unknown';
 
@@ -276,9 +283,14 @@ function detectIntent(msg: string): IntentType {
   if (/\badd\b.*(item|step|to).*(checklist|list)\b/i.test(msg) || /\b(checklist|list)\b.*(add|item)\b/i.test(msg)) return 'add_checklist_item';
   if (/\b(create|add|new|make)\b.*(checklist)\b/i.test(msg)) return 'create_checklist';
 
+  // Notes
+  if (/\b(delete|remove)\b.*(note)\b/i.test(msg)) return 'delete_note';
+  if (/\b(show|list|view|my)\b.*(note[s]?)\b/i.test(msg) || /\bmy notes\b/i.test(msg)) return 'list_notes';
+  if (/\b(create|add|new|save|write|jot)\b.*(note)\b/i.test(msg) || /\bnote[d]?\b.*:/.test(msg)) return 'create_note';
+
   // Mental health
   if (/\b(log|track|record)\b.*(mood|feeling|mental|health|check.?in)\b/i.test(msg) || /\b(mood|check.?in|how.*feeling|feeling today)\b/i.test(msg)) return 'log_mood';
-  if (/\b(journal|diary|write|note)\b/i.test(msg)) return 'write_journal';
+  if (/\b(journal|diary|write)\b/i.test(msg)) return 'write_journal';
 
   // Analytics
   if (/\b(summary|stats|analytics|overview|how am i doing|productivity|progress)\b/i.test(msg)) return 'show_summary';
@@ -297,6 +309,7 @@ const INTENT_VALUES = [
   'start_timer','stop_timer',
   'create_checklist','add_checklist_item',
   'log_mood','write_journal',
+  'create_note','list_notes','delete_note',
   'show_summary','help','unknown',
 ] as const;
 
@@ -322,6 +335,8 @@ const parsedRequestSchema = z.object({
   timerDescription: z.string().nullable().optional(),
   itemName: z.string().nullable().optional(),
   checklistName: z.string().nullable().optional(),
+  noteTitle: z.string().nullable().optional(),
+  noteContent: z.string().nullable().optional(),
 });
 
 type ParsedRequest = z.infer<typeof parsedRequestSchema>;
@@ -357,6 +372,11 @@ ProFlow helps users manage their work and wellbeing with these features:
 - Create named checklists
 - Add items to existing checklists
 
+### Notes
+- Create notes with a title and content
+- List your recent notes
+- Delete a note by name
+
 ### Mental Health & Wellbeing
 - Log daily mood check-ins (mood 1-5, energy 1-5, stress 1-5, optional notes)
 - Write journal entries with optional title and content
@@ -386,9 +406,9 @@ async function parseRequestWithLLM(msg: string): Promise<ParsedRequest | null> {
   const today = new Date();
   const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
   const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
-  const todayStr = today.toISOString().split('T')[0];
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-  const nextWeekStr = nextWeek.toISOString().split('T')[0];
+  const todayStr = localDateStr(today);
+  const tomorrowStr = localDateStr(tomorrow);
+  const nextWeekStr = localDateStr(nextWeek);
 
   const system = `You are an intent classifier and entity extractor for ProFlow productivity app.
 Classify the user message into exactly one intent AND extract all relevant entities.
@@ -400,6 +420,7 @@ INTENTS:
 - start_timer, stop_timer
 - create_checklist, add_checklist_item
 - log_mood, write_journal
+- create_note, list_notes, delete_note
 - show_summary, help
 - unknown (conversational/unclear)
 
@@ -418,6 +439,8 @@ ENTITY EXTRACTION RULES:
 - timerDescription: what the timer is tracking (e.g. "deep work", "meeting")
 - itemName: checklist item to add
 - checklistName: which checklist to add item to
+- noteTitle: title of the note
+- noteContent: body/content of the note
 
 Only extract entities clearly present in the message. Use null for anything not mentioned.
 Respond with valid JSON only.`;
@@ -912,7 +935,7 @@ async function handlePendingIntent(
         if (!isSkip(msg)) c.notes = msg.trim();
         try {
           const service = new MentalHealthService();
-          const today = new Date().toISOString().split('T')[0];
+          const today = localDateStr(new Date());
           const checkIn = service.createCheckIn({
             userId,
             date: today,
@@ -964,6 +987,50 @@ async function handlePendingIntent(
           };
         } catch (err) {
           return { role: 'assistant', content: `Couldn't save journal entry: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
+      }
+      break;
+    }
+
+    // ── Create Note (pending) ────────────────────────────────────
+    case 'create_note': {
+      const c = pending.collected;
+      if (pending.step === 'awaiting_title') {
+        const title = msg.trim().replace(/["']+$/, '').trim();
+        if (!title) return { role: 'assistant', content: "What should the note be called?", pendingIntent: pending };
+        c.title = title;
+        return {
+          role: 'assistant',
+          content: `Great — **"${title}"**. What's the content? (or say *skip* to save without content)`,
+          pendingIntent: { type: 'create_note', step: 'awaiting_content', collected: c },
+        };
+      }
+      if (pending.step === 'awaiting_content') {
+        const content = isSkip(msg) ? '' : msg.trim();
+        try {
+          const service = new NoteService();
+          const note = service.create({ userId, title: c.title as string, content });
+          return { role: 'assistant', content: `Done! ✓ Note saved — **"${note.title}"**.`, action: { type: 'create_note', success: true, data: note }, pendingIntent: null };
+        } catch (err) {
+          return { role: 'assistant', content: `Couldn't save the note: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+        }
+      }
+      break;
+    }
+
+    // ── Delete Note (pending) ────────────────────────────────────
+    case 'delete_note': {
+      if (pending.step === 'awaiting_confirmation') {
+        if (isConfirm(msg)) {
+          try {
+            const service = new NoteService();
+            service.delete(pending.collected.noteId as string, userId);
+            return { role: 'assistant', content: `Done! Note **"${pending.collected.noteTitle}"** deleted.`, action: { type: 'delete_note', success: true }, pendingIntent: null };
+          } catch (err) {
+            return { role: 'assistant', content: `Couldn't delete note: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+          }
+        } else {
+          return { role: 'assistant', content: "Okay, the note was not deleted.", pendingIntent: null };
         }
       }
       break;
@@ -1404,7 +1471,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
       if (moodFromMsg && energyFromMsg && stressFromMsg) {
         try {
           const service = new MentalHealthService();
-          const today2 = new Date().toISOString().split('T')[0];
+          const today2 = localDateStr(new Date());
           const checkIn = service.createCheckIn({
             userId,
             date: today2,
@@ -1466,6 +1533,73 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
       };
     }
 
+    // ── Create Note ───────────────────────────────────────────────
+    case 'create_note': {
+      const titleFromMsg = parsed?.noteTitle || parsed?.title ||
+        extractTitle(msg.replace(/\b(create|add|new|save|write|jot)\s+(a\s+)?note\s*(called|titled|named)?\b/gi, '').trim());
+      const contentFromMsg = parsed?.noteContent || parsed?.content ||
+        msg.replace(/\b(create|add|new|save|write|jot)\s+(a\s+)?note\s*(called|titled|named)?\s*/gi, '').replace(/^["']|["']$/g, '').trim() || null;
+
+      if (!titleFromMsg && !contentFromMsg) {
+        return {
+          role: 'assistant',
+          content: "What would you like to note down? Give it a title.",
+          pendingIntent: { type: 'create_note', step: 'awaiting_title', collected: {} },
+        };
+      }
+
+      const finalTitle = titleFromMsg || (contentFromMsg ? contentFromMsg.split('\n')[0].slice(0, 60) : 'Note');
+      const finalContent = contentFromMsg || '';
+
+      try {
+        const service = new NoteService();
+        const note = service.create({ userId, title: finalTitle, content: finalContent });
+        return { role: 'assistant', content: `Done! ✓ Note saved — **"${note.title}"**.`, action: { type: 'create_note', success: true, data: note }, pendingIntent: null };
+      } catch (err) {
+        return { role: 'assistant', content: `Couldn't save the note: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+      }
+    }
+
+    // ── List Notes ────────────────────────────────────────────────
+    case 'list_notes': {
+      try {
+        const service = new NoteService();
+        const notes = service.list(userId, { limit: 5 });
+        if (notes.length === 0) {
+          return { role: 'assistant', content: "You don't have any notes yet. Say *add a note* to create one!", pendingIntent: null };
+        }
+        const lines = notes.map(n => `- **${n.title}**${n.content ? `: ${n.content.slice(0, 80)}${n.content.length > 80 ? '…' : ''}` : ''}`);
+        return { role: 'assistant', content: `Here are your recent notes:\n\n${lines.join('\n')}`, pendingIntent: null };
+      } catch (err) {
+        return { role: 'assistant', content: `Couldn't fetch notes: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+      }
+    }
+
+    // ── Delete Note ───────────────────────────────────────────────
+    case 'delete_note': {
+      const nameRaw = parsed?.noteTitle || parsed?.title ||
+        msg.replace(/\b(delete|remove)\s+(the\s+)?note\s*(called|titled|named)?\s*/gi, '').trim();
+      if (!nameRaw) {
+        return { role: 'assistant', content: "Which note should I delete? Please give me the note title.", pendingIntent: null };
+      }
+      try {
+        const service = new NoteService();
+        const notes = service.list(userId, {}) as Array<{ id: string; title: string }>;
+        const nl = nameRaw.toLowerCase();
+        const found = notes.find(n => n.title.toLowerCase() === nl) || notes.find(n => n.title.toLowerCase().includes(nl) || nl.includes(n.title.toLowerCase()));
+        if (!found) {
+          return { role: 'assistant', content: `I couldn't find a note called **"${nameRaw}"**. Check the Notes page to see all your notes.`, pendingIntent: null };
+        }
+        return {
+          role: 'assistant',
+          content: `Are you sure you want to delete the note **"${found.title}"**? This can't be undone.`,
+          pendingIntent: { type: 'delete_note', step: 'awaiting_confirmation', collected: { noteId: found.id, noteTitle: found.title } },
+        };
+      } catch (err) {
+        return { role: 'assistant', content: `Couldn't find the note: ${err instanceof Error ? err.message : 'error'}`, pendingIntent: null };
+      }
+    }
+
     // ── Show Summary ─────────────────────────────────────────────
     case 'show_summary': {
       try {
@@ -1524,6 +1658,10 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
           "**Mental Health**\n" +
           "- *Log my mood* / *Check in*\n" +
           "- *Write a journal entry*\n\n" +
+          "**Notes**\n" +
+          "- *Add a note: buy groceries*\n" +
+          "- *Show my notes*\n" +
+          "- *Delete note buy groceries*\n\n" +
           "**Analytics**\n" +
           "- *How am I doing?* / *Show my stats*\n\n" +
           (isLLMEnabled() ? "*You can also ask me anything in natural language — I understand full sentences!*" : ""),

@@ -18,6 +18,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Zap,
+  StickyNote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/lib/contexts/sidebar-context";
@@ -38,6 +39,7 @@ const navItems = [
   { label: "Checklists", href: "/checklists", icon: ListChecks },
   { label: "Calendar", href: "/calendar", icon: Calendar },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
+  { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Reminders", href: "/reminders", icon: Bell },
   { label: "Audit Log", href: "/audit-log", icon: ScrollText },
   { label: "Settings", href: "/settings", icon: Settings },

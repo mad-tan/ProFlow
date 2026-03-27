@@ -10,11 +10,12 @@ import {
   Calendar,
   Clock,
   FolderKanban,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/lib/hooks/use-projects";
 import { useTasks } from "@/lib/hooks/use-tasks";
-import type { ProjectStatus } from "@/lib/types";
+import type { ProjectStatus, TaskPriority, TaskStatus } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -77,13 +78,20 @@ export default function ProjectDetailPage() {
     deleteProject,
     archiveProject,
   } = useProject(projectId);
-  const { tasks, isLoading: tasksLoading } = useTasks({ projectId });
+  const { tasks, isLoading: tasksLoading, createTask } = useTasks({ projectId });
 
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editStatus, setEditStatus] = useState<ProjectStatus>("active");
   const [submitting, setSubmitting] = useState(false);
+
+  const [taskOpen, setTaskOpen] = useState(false);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskPriority, setTaskPriority] = useState<TaskPriority>("none");
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskStatus, setTaskStatus] = useState<TaskStatus>("todo");
+  const [taskSubmitting, setTaskSubmitting] = useState(false);
 
   function openEdit() {
     if (!project) return;
@@ -123,6 +131,33 @@ export default function ProjectDetailPage() {
       router.push("/projects");
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  function openCreateTask() {
+    setTaskTitle("");
+    setTaskPriority("none");
+    setTaskDueDate("");
+    setTaskStatus("todo");
+    setTaskOpen(true);
+  }
+
+  async function handleCreateTask() {
+    if (!taskTitle.trim()) return;
+    setTaskSubmitting(true);
+    try {
+      await createTask({
+        title: taskTitle.trim(),
+        priority: taskPriority,
+        dueDate: taskDueDate || undefined,
+        status: taskStatus,
+        projectId,
+      });
+      setTaskOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTaskSubmitting(false);
     }
   }
 
@@ -296,7 +331,13 @@ export default function ProjectDetailPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="tasks" className="mt-4">
+        <TabsContent value="tasks" className="mt-4 space-y-4">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={openCreateTask}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Task
+            </Button>
+          </div>
           {tasksLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -307,7 +348,9 @@ export default function ProjectDetailPage() {
             <EmptyState
               icon={FolderKanban}
               title="No tasks in this project"
-              description="Add tasks from the Tasks page and assign them to this project."
+              description="Click New Task to add the first task to this project."
+              actionLabel="New Task"
+              onAction={openCreateTask}
             />
           ) : (
             <div className="space-y-2">
@@ -335,7 +378,7 @@ export default function ProjectDetailPage() {
                     </p>
                     {task.dueDate && (
                       <p className="text-xs text-muted-foreground">
-                        Due {new Date(task.dueDate).toLocaleDateString()}
+                        Due {new Date(task.dueDate + 'T12:00:00').toLocaleDateString()}
                       </p>
                     )}
                   </div>
@@ -348,6 +391,88 @@ export default function ProjectDetailPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Create Task Dialog */}
+      <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>New Task</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="task-title">Title</Label>
+              <Input
+                id="task-title"
+                placeholder="Task title"
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select
+                  value={taskPriority}
+                  onValueChange={(v) => setTaskPriority(v as TaskPriority)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select
+                  value={taskStatus}
+                  onValueChange={(v) => setTaskStatus(v as TaskStatus)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="backlog">Backlog</SelectItem>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="in_review">In Review</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="task-due">Due Date</Label>
+              <Input
+                id="task-due"
+                type="date"
+                value={taskDueDate}
+                onChange={(e) => setTaskDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setTaskOpen(false)}
+              disabled={taskSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateTask}
+              disabled={!taskTitle.trim() || taskSubmitting}
+            >
+              {taskSubmitting ? "Creating..." : "Create Task"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>

@@ -363,7 +363,7 @@ export default function TaskDetailPage() {
                 </Label>
                 <p className="text-sm">
                   {task.dueDate
-                    ? new Date(task.dueDate).toLocaleDateString()
+                    ? new Date(task.dueDate + 'T12:00:00').toLocaleDateString()
                     : "No due date"}
                 </p>
               </div>

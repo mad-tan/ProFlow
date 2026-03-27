@@ -260,7 +260,7 @@ export default function TasksPage() {
                     </p>
                     {task.dueDate && (
                       <p className="text-xs text-muted-foreground">
-                        Due {new Date(task.dueDate).toLocaleDateString()}
+                        Due {new Date(task.dueDate + 'T12:00:00').toLocaleDateString()}
                       </p>
                     )}
                   </div>

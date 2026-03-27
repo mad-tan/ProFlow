@@ -200,6 +200,18 @@ export interface AuditLogEntry {
   createdAt: string;
 }
 
+export interface Note {
+  id: string;
+  userId: string;
+  title: string;
+  content: string;
+  isPinned: boolean;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Utility Types ──────────────────────────────────────────────────────────
 
 export interface DateRange {

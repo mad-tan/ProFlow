@@ -28,7 +28,7 @@ function snakeToCamel(str: string): string {
  * Map a DB row (snake_case keys) to a TS object (camelCase keys).
  */
 /** Columns that are stored as INTEGER 0/1 but should be returned as boolean. */
-const BOOLEAN_COLUMNS = new Set(['is_template', 'is_completed', 'is_active']);
+const BOOLEAN_COLUMNS = new Set(['is_template', 'is_completed', 'is_active', 'is_pinned']);
 
 function rowToEntity<T>(row: Record<string, unknown>): T {
   const entity: Record<string, unknown> = {};
