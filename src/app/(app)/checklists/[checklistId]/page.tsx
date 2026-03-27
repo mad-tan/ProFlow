@@ -10,6 +10,7 @@ import {
   Edit2,
   Check,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChecklist } from "@/lib/hooks/use-checklists";
@@ -20,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function ChecklistDetailPage() {
   const params = useParams();
@@ -39,6 +47,8 @@ export default function ChecklistDetailPage() {
   const [titleValue, setTitleValue] = useState("");
   const [newItemContent, setNewItemContent] = useState("");
   const [addingItem, setAddingItem] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const items = checklist?.items ?? [];
   const totalItems = items.length;
@@ -91,6 +101,18 @@ export default function ChecklistDetailPage() {
     }
   }
 
+  async function handleDeleteChecklist() {
+    setDeleting(true);
+    try {
+      await deleteChecklist();
+      router.push("/checklists");
+    } catch (err) {
+      console.error(err);
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -119,6 +141,29 @@ export default function ChecklistDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Confirm delete dialog */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete Checklist
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <strong>{checklist?.title}</strong>? This will also delete all items inside it and cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteChecklist} disabled={deleting}>
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
@@ -163,6 +208,14 @@ export default function ChecklistDetailPage() {
                 onClick={startEditTitle}
               >
                 <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
             </div>
           )}

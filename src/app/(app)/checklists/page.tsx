@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, CheckSquare } from "lucide-react";
+import { Plus, CheckSquare, MoreHorizontal, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChecklists } from "@/lib/hooks/use-checklists";
 import { PageHeader } from "@/components/layout/page-header";
@@ -27,6 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const TYPE_LABELS: Record<string, string> = {
   daily: "Daily",
@@ -43,11 +49,23 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function ChecklistsPage() {
-  const { checklists, isLoading, createChecklist } = useChecklists();
+  const { checklists, isLoading, createChecklist, deleteChecklist } = useChecklists();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState("custom");
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string) {
+    setDeletingId(id);
+    try {
+      await deleteChecklist(id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleCreate() {
     if (!formTitle.trim()) return;
@@ -107,11 +125,12 @@ export default function ChecklistsPage() {
             const type = meta?.type ?? "custom";
 
             return (
-              <a key={cl.id} href={`/checklists/${cl.id}`}>
+              <div key={cl.id} className="relative group">
+                <a href={`/checklists/${cl.id}`}>
                 <Card className="transition-shadow hover:shadow-md cursor-pointer h-full">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <CardTitle className="text-base truncate">
+                      <CardTitle className="text-base truncate pr-6">
                         {cl.title}
                       </CardTitle>
                       <Badge
@@ -139,7 +158,36 @@ export default function ChecklistsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              </a>
+                </a>
+
+                {/* Delete menu — outside the <a> to avoid navigating */}
+                <div
+                  className="absolute top-3 right-3 z-10"
+                  onClick={(e) => e.preventDefault()}
+                >
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        disabled={deletingId === cl.id}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => handleDelete(cl.id)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {deletingId === cl.id ? "Deleting…" : "Delete"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
             );
           })}
         </div>
