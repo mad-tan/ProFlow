@@ -13,7 +13,9 @@ export function ChatFAB() {
       type="button"
       onClick={toggleOpen}
       className={cn(
-        "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full",
+        "fixed bottom-6 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full sm:right-6",
+        // On mobile, hide FAB when chat is open (full-screen panel has its own close button)
+        isOpen && "hidden sm:flex",
         "bg-gradient-to-br from-indigo-500 to-purple-600 text-white",
         "shadow-lg shadow-indigo-500/30",
         "transition-all duration-300 ease-out",
