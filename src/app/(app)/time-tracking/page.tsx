@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Clock, Timer } from "lucide-react";
 import { useTimeEntries, useActiveTimer } from "@/lib/hooks/use-time-tracking";
 import { PageHeader } from "@/components/layout/page-header";
@@ -35,12 +35,12 @@ function formatTime(dateStr: string): string {
 
 export default function TimeTrackingPage() {
   const today = new Date().toISOString().split("T")[0];
-  const { timeEntries, isLoading, createManualEntry } = useTimeEntries({
+  const { timeEntries, isLoading, createManualEntry, updateEntry } = useTimeEntries({
     startDate: today,
     endDate: today,
   });
   // Fetch recent entries for description autocomplete suggestions
-  const { timeEntries: recentEntries } = useTimeEntries({ pageSize: 50 });
+  const { timeEntries: recentEntries } = useTimeEntries({});
   const {
     activeTimer,
     isLoading: timerLoading,
@@ -55,6 +55,11 @@ export default function TimeTrackingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [timerDesc, setTimerDesc] = useState("");
   const [elapsed, setElapsed] = useState("00:00");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [editDescValue, setEditDescValue] = useState("");
+  const descInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!activeTimer?.startTime) { setElapsed("00:00"); return; }
@@ -75,6 +80,32 @@ export default function TimeTrackingPage() {
     timeEntries?.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0) ?? 0;
   const totalHours = (totalMinutes / 60).toFixed(1);
 
+  // Build unique description suggestions from recent entries
+  const allDescriptions = Array.from(
+    new Set(
+      (recentEntries ?? [])
+        .map((e) => e.description)
+        .filter(Boolean) as string[]
+    )
+  );
+  const filteredSuggestions = timerDesc
+    ? allDescriptions.filter((d) => d.toLowerCase().includes(timerDesc.toLowerCase()))
+    : allDescriptions;
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (
+        descInputRef.current && !descInputRef.current.contains(e.target as Node) &&
+        suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
   async function handleStartTimer() {
     try {
       await startTimer(undefined, timerDesc || undefined);
@@ -90,6 +121,16 @@ export default function TimeTrackingPage() {
     } catch (err) {
       console.error(err);
     }
+  }
+
+  async function handleSaveDesc() {
+    if (!activeTimer) return;
+    try {
+      await updateEntry(activeTimer.id, { description: editDescValue.trim() || undefined });
+    } catch (err) {
+      console.error(err);
+    }
+    setEditingDesc(false);
   }
 
   async function handleManualEntry() {
@@ -145,9 +186,28 @@ export default function TimeTrackingPage() {
               <div className="text-5xl font-mono font-bold tabular-nums tracking-tight">
                 {elapsed}
               </div>
-              {activeTimer.description && (
-                <p className="text-sm text-muted-foreground">
-                  {activeTimer.description}
+              {editingDesc ? (
+                <div className="flex items-center gap-2 w-full max-w-sm">
+                  <Input
+                    value={editDescValue}
+                    onChange={(e) => setEditDescValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveDesc();
+                      if (e.key === "Escape") setEditingDesc(false);
+                    }}
+                    onBlur={handleSaveDesc}
+                    autoFocus
+                    className="text-sm h-8"
+                    placeholder="Describe your work..."
+                  />
+                </div>
+              ) : (
+                <p
+                  className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                  onClick={() => { setEditDescValue(activeTimer.description ?? ""); setEditingDesc(true); }}
+                  title="Click to edit description"
+                >
+                  {activeTimer.description || <span className="italic">Add description…</span>}
                 </p>
               )}
               <Button
@@ -165,31 +225,48 @@ export default function TimeTrackingPage() {
               <div className="text-5xl font-mono font-bold tabular-nums tracking-tight text-muted-foreground">
                 00:00
               </div>
-              <div className="flex items-center gap-2 w-full max-w-sm">
-                <datalist id="timer-desc-suggestions">
-                  {Array.from(
-                    new Set(
-                      (recentEntries ?? [])
-                        .map((e) => e.description)
-                        .filter(Boolean) as string[]
-                    )
-                  ).map((d) => (
-                    <option key={d} value={d} />
-                  ))}
-                </datalist>
-                <Input
-                  placeholder="What are you working on?"
-                  value={timerDesc}
-                  onChange={(e) => setTimerDesc(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") handleStartTimer(); }}
-                  className="flex-1"
-                  list="timer-desc-suggestions"
-                  autoComplete="off"
-                />
-                <Button size="lg" onClick={handleStartTimer}>
-                  <Timer className="mr-2 h-5 w-5" />
-                  Start
-                </Button>
+              <div className="relative w-full max-w-sm">
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={descInputRef}
+                    placeholder="What are you working on?"
+                    value={timerDesc}
+                    onChange={(e) => { setTimerDesc(e.target.value); setShowSuggestions(true); }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") { setShowSuggestions(false); handleStartTimer(); }
+                      if (e.key === "Escape") setShowSuggestions(false);
+                    }}
+                    className="flex-1"
+                    autoComplete="off"
+                  />
+                  <Button size="lg" onClick={() => { setShowSuggestions(false); handleStartTimer(); }}>
+                    <Timer className="mr-2 h-5 w-5" />
+                    Start
+                  </Button>
+                </div>
+                {showSuggestions && filteredSuggestions.length > 0 && (
+                  <div
+                    ref={suggestionsRef}
+                    className="absolute z-50 top-full mt-1 left-0 right-[calc(4.5rem+0.5rem)] bg-popover border rounded-md shadow-md overflow-hidden"
+                  >
+                    {filteredSuggestions.slice(0, 8).map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors truncate"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setTimerDesc(s);
+                          setShowSuggestions(false);
+                          descInputRef.current?.focus();
+                        }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
