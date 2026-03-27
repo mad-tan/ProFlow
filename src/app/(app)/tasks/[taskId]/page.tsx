@@ -25,6 +25,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -494,16 +495,35 @@ export default function TaskDetailPage() {
 
               <Separator />
 
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Project</Label>
-                {project ? (
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>{project.name}</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No project</p>
-                )}
+                <Select
+                  value={task.projectId ?? "none"}
+                  onValueChange={async (v) => {
+                    try {
+                      await updateTask({ projectId: v === "none" ? null : v });
+                    } catch (err) { console.error(err); }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue>
+                      {project ? (
+                        <div className="flex items-center gap-1.5">
+                          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{project.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">No project</span>
+                      )}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No project</SelectItem>
+                    {(projects ?? []).map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <Separator />
@@ -512,12 +532,12 @@ export default function TaskDetailPage() {
                 <Label className="text-xs text-muted-foreground">
                   Due Date
                 </Label>
-                <Input
+                <DateInput
                   type="date"
                   value={task.dueDate ?? ""}
                   onChange={async (e) => {
                     try {
-                      await updateTask({ dueDate: e.target.value || null });
+                      await updateTask({ dueDate: (e.target as HTMLInputElement).value || null });
                     } catch (err) {
                       console.error(err);
                     }

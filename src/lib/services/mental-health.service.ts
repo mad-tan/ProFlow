@@ -6,7 +6,7 @@ import {
   type MentalHealthAverages,
 } from '@/lib/repositories/mental-health.repository';
 import { AuditLogRepository } from '@/lib/repositories/audit-log.repository';
-import { NotFoundError, ConflictError } from '@/lib/utils/errors';
+import { NotFoundError } from '@/lib/utils/errors';
 import type { MentalHealthCheckIn, JournalEntry, DateRange } from '@/lib/types';
 
 export interface BurnoutIndicators {
@@ -37,16 +37,9 @@ export class MentalHealthService {
   }
 
   /**
-   * Create a check-in. Enforces one check-in per day.
+   * Create a new check-in. Multiple check-ins per day are allowed.
    */
   createCheckIn(data: CreateCheckInData): MentalHealthCheckIn {
-    const existing = this.repo.findCheckInByDate(data.userId, data.date);
-    if (existing) {
-      throw new ConflictError(
-        'A check-in already exists for this date. Only one check-in per day is allowed.'
-      );
-    }
-
     const checkIn = this.repo.createCheckIn(data);
 
     this.auditLog.log(data.userId, 'mental_health_check_in', checkIn.id, 'create', {

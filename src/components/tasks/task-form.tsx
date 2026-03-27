@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -248,21 +249,21 @@ export function TaskForm({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="task-start-date">Start Date</Label>
-              <Input
+              <DateInput
                 id="task-start-date"
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => setStartDate((e.target as HTMLInputElement).value)}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="task-due-date">Due Date</Label>
-              <Input
+              <DateInput
                 id="task-due-date"
                 type="date"
                 value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                onChange={(e) => setDueDate((e.target as HTMLInputElement).value)}
               />
             </div>
           </div>

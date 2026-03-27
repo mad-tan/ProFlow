@@ -22,6 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -485,10 +486,10 @@ export default function TasksPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Due Date</Label>
-                <Input
+                <DateInput
                   type="date"
                   value={formDueDate}
-                  onChange={(e) => setFormDueDate(e.target.value)}
+                  onChange={(e) => setFormDueDate((e.target as HTMLInputElement).value)}
                 />
               </div>
               <div className="space-y-2">

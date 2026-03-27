@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -167,21 +168,21 @@ export function TimeEntryForm({ entry, open: controlledOpen, onOpenChange, trigg
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="startTime">Start Time</Label>
-              <Input
+              <DateInput
                 id="startTime"
                 type="datetime-local"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => setStartTime((e.target as HTMLInputElement).value)}
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="endTime">End Time</Label>
-              <Input
+              <DateInput
                 id="endTime"
                 type="datetime-local"
                 value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
+                onChange={(e) => setEndTime((e.target as HTMLInputElement).value)}
               />
             </div>
           </div>

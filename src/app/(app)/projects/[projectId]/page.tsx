@@ -20,6 +20,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -448,11 +449,11 @@ export default function ProjectDetailPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="task-due">Due Date</Label>
-              <Input
+              <DateInput
                 id="task-due"
                 type="date"
                 value={taskDueDate}
-                onChange={(e) => setTaskDueDate(e.target.value)}
+                onChange={(e) => setTaskDueDate((e.target as HTMLInputElement).value)}
               />
             </div>
           </div>

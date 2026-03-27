@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateInput } from "@/components/ui/date-input";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -220,17 +221,17 @@ export default function AuditLogPage() {
         </Select>
 
         <div className="flex items-center gap-2">
-          <Input
+          <DateInput
             type="date"
             value={startDate}
-            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+            onChange={(e) => { setStartDate((e.target as HTMLInputElement).value); setPage(1); }}
             className="w-[140px] h-9 text-sm"
           />
           <span className="text-muted-foreground text-xs">to</span>
-          <Input
+          <DateInput
             type="date"
             value={endDate}
-            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+            onChange={(e) => { setEndDate((e.target as HTMLInputElement).value); setPage(1); }}
             className="w-[140px] h-9 text-sm"
           />
         </div>

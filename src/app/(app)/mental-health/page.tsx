@@ -13,7 +13,7 @@ import {
   useCheckIns,
   useJournalEntries,
 } from "@/lib/hooks/use-mental-health";
-import type { MoodRating, EnergyLevel, StressLevel } from "@/lib/types";
+import type { MoodRating, EnergyLevel, StressLevel, MentalHealthCheckIn } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,10 @@ function moodToEmoji(rating: number): string {
   return MOOD_EMOJIS.find((m) => m.value === rating)?.emoji ?? "\ud83d\ude10";
 }
 
+function moodToLabel(rating: number): string {
+  return MOOD_EMOJIS.find((m) => m.value === rating)?.label ?? "Okay";
+}
+
 function LevelBar({ value, max = 5, color }: { value: number; max?: number; color: string }) {
   return (
     <div className="flex gap-1">
@@ -59,6 +63,31 @@ function LevelBar({ value, max = 5, color }: { value: number; max?: number; colo
       ))}
     </div>
   );
+}
+
+/** Group check-ins by calendar date (YYYY-MM-DD), preserving insertion order. */
+function groupByDate(checkIns: MentalHealthCheckIn[]): { dateLabel: string; entries: MentalHealthCheckIn[] }[] {
+  const today = new Date().toISOString().split("T")[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+
+  const map = new Map<string, MentalHealthCheckIn[]>();
+  for (const ci of checkIns) {
+    const key = ci.date.slice(0, 10); // YYYY-MM-DD
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(ci);
+  }
+
+  return Array.from(map.entries()).map(([key, entries]) => {
+    let dateLabel: string;
+    if (key === today) dateLabel = "Today";
+    else if (key === yesterday) dateLabel = "Yesterday";
+    else dateLabel = new Date(key + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+    return { dateLabel, entries };
+  });
+}
+
+function formatCheckInTime(createdAt: string): string {
+  return new Date(createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 export default function MentalHealthPage() {
@@ -83,6 +112,9 @@ export default function MentalHealthPage() {
   const [journalTitle, setJournalTitle] = useState("");
   const [journalContent, setJournalContent] = useState("");
   const [journalSubmitting, setJournalSubmitting] = useState(false);
+
+  const today = new Date().toISOString().split("T")[0];
+  const todayCount = (checkIns ?? []).filter((c) => c.date.slice(0, 10) === today).length;
 
   async function handleCheckIn() {
     setCheckInSubmitting(true);
@@ -125,6 +157,8 @@ export default function MentalHealthPage() {
     }
   }
 
+  const grouped = groupByDate(checkIns ?? []);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -141,6 +175,11 @@ export default function MentalHealthPage() {
           <TabsTrigger value="history" className="gap-1.5">
             <History className="h-4 w-4" />
             History
+            {(checkIns ?? []).length > 0 && (
+              <Badge variant="secondary" className="ml-1 px-1.5 py-0 h-4 text-[10px]">
+                {(checkIns ?? []).length}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="journal" className="gap-1.5">
             <BookOpen className="h-4 w-4" />
@@ -154,7 +193,9 @@ export default function MentalHealthPage() {
             <CardHeader className="text-center">
               <CardTitle className="text-xl">How are you feeling?</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Take a moment to check in with yourself
+                {todayCount === 0
+                  ? "Take a moment to check in with yourself"
+                  : `You've logged ${todayCount} check-in${todayCount > 1 ? "s" : ""} today — log another anytime`}
               </p>
             </CardHeader>
             <CardContent className="space-y-8">
@@ -270,66 +311,87 @@ export default function MentalHealthPage() {
         {/* History Tab */}
         <TabsContent value="history" className="mt-6">
           {checkInsLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-40" />
+            <div className="space-y-6">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="space-y-3">
+                  <Skeleton className="h-5 w-24" />
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 3 }).map((_, j) => (
+                      <Skeleton key={j} className="h-40" />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          ) : !checkIns || checkIns.length === 0 ? (
+          ) : grouped.length === 0 ? (
             <EmptyState
               icon={Heart}
               title="No check-ins yet"
               description="Submit your first check-in to start tracking your mental health."
             />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {checkIns.map((checkIn) => (
-                <Card key={checkIn.id} className="transition-shadow hover:shadow-md">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-4xl">{moodToEmoji(checkIn.moodRating)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(checkIn.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Energy</span>
-                        <span>{checkIn.energyLevel}/5</span>
-                      </div>
-                      <LevelBar
-                        value={checkIn.energyLevel}
-                        color="bg-amber-500"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Stress</span>
-                        <span>{checkIn.stressLevel}/5</span>
-                      </div>
-                      <LevelBar
-                        value={checkIn.stressLevel}
-                        color="bg-red-500"
-                      />
-                    </div>
-                    {checkIn.sleepHours !== null && (
-                      <p className="text-xs text-muted-foreground">
-                        Sleep: {checkIn.sleepHours}h
-                      </p>
-                    )}
-                    {checkIn.notes && (
-                      <p className="text-xs text-muted-foreground line-clamp-2 italic">
-                        &ldquo;{checkIn.notes}&rdquo;
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
+            <div className="space-y-8">
+              {grouped.map(({ dateLabel, entries }) => (
+                <div key={dateLabel}>
+                  {/* Date header */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">{dateLabel}</h3>
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-xs text-muted-foreground">
+                      {entries.length} {entries.length === 1 ? "entry" : "entries"}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {entries.map((checkIn) => (
+                      <Card key={checkIn.id} className="transition-shadow hover:shadow-md">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-3xl">{moodToEmoji(checkIn.moodRating)}</span>
+                              <div>
+                                <p className="text-sm font-medium">{moodToLabel(checkIn.moodRating)}</p>
+                                <p className="text-xs text-muted-foreground">{formatCheckInTime(checkIn.createdAt)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Energy</span>
+                              <span>{checkIn.energyLevel}/5</span>
+                            </div>
+                            <LevelBar
+                              value={checkIn.energyLevel}
+                              color="bg-amber-500"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Stress</span>
+                              <span>{checkIn.stressLevel}/5</span>
+                            </div>
+                            <LevelBar
+                              value={checkIn.stressLevel}
+                              color="bg-red-500"
+                            />
+                          </div>
+                          {checkIn.sleepHours !== null && (
+                            <p className="text-xs text-muted-foreground">
+                              Sleep: {checkIn.sleepHours}h
+                            </p>
+                          )}
+                          {checkIn.notes && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 italic">
+                              &ldquo;{checkIn.notes}&rdquo;
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}

@@ -57,7 +57,7 @@ export class MentalHealthRepository extends BaseRepository<MentalHealthCheckIn> 
     const sql = `
       SELECT * FROM mental_health_check_ins
       WHERE ${clauses.join(' AND ')}
-      ORDER BY date DESC
+      ORDER BY created_at DESC
     `;
     return this.query<MentalHealthCheckIn>(sql, params);
   }

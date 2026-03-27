@@ -117,14 +117,14 @@ function generateInsights(
       insights.push({
         icon: Smile,
         title: "Wellbeing Check",
-        text: `Average mood: ${avgMood}/5, energy: ${avgEnergy}/5, stress: ${avgStress}/5. Keep logging daily check-ins to track your trends over time.`,
+        text: `Average mood: ${avgMood}/5, energy: ${avgEnergy}/5, stress: ${avgStress}/5. Keep logging check-ins to track your trends over time.`,
       });
     }
   } else if (summary && summary.moodAverage > 0) {
     insights.push({
       icon: Smile,
       title: "Mood Tracking",
-      text: `Your average mood is ${Math.round(summary.moodAverage * 10) / 10}/5. Log daily check-ins on the Mental Health page to build a fuller picture.`,
+      text: `Your average mood is ${Math.round(summary.moodAverage * 10) / 10}/5. Log check-ins on the Mental Health page to build a fuller picture.`,
     });
   }
 
