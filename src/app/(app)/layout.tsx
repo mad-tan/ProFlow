@@ -8,6 +8,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { useSidebar } from "@/lib/contexts/sidebar-context";
 import { ChatFAB } from "@/components/ai-chatbot/chat-fab";
 import { ChatPanel } from "@/components/ai-chatbot/chat-panel";
+import { SwipeHandler } from "@/components/layout/swipe-handler";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { isCollapsed } = useSidebar();
@@ -31,6 +32,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* AI Chatbot */}
       <ChatPanel />
       <ChatFAB />
+
+      {/* Global touch-swipe gesture handler (mobile only) */}
+      <SwipeHandler />
     </div>
   );
 }

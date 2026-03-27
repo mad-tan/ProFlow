@@ -57,12 +57,16 @@ export function Sidebar() {
           isCollapsed ? "w-[68px]" : "w-[240px]"
         )}
       >
-        {/* Logo */}
+        {/* Logo — taller on iOS to clear the status bar */}
         <div
           className={cn(
-            "flex items-center h-16 px-4 border-b border-slate-800 shrink-0",
+            "flex items-center px-4 border-b border-slate-800 shrink-0",
             isCollapsed ? "justify-center" : "gap-3"
           )}
+          style={{
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            minHeight: "calc(4rem + env(safe-area-inset-top, 0px))",
+          }}
         >
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 shrink-0">
             <Zap className="h-4 w-4 text-white" />

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -10,9 +10,27 @@ import { ChatbotProvider } from "@/lib/contexts/chatbot-context";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Allows content to extend into notch/home-indicator areas;
+  // we handle safe-area padding ourselves via CSS env() vars.
+  viewportFit: "cover",
+  themeColor: "#6366f1",
+};
+
 export const metadata: Metadata = {
   title: "ProFlow - Productivity Platform",
   description: "All-in-one productivity platform for teams and individuals",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ProFlow",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({
