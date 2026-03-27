@@ -64,23 +64,21 @@ function formatTime(dateStr: string): { date: string; time: string } {
 
 function getEntityTitle(entry: AuditLogEntry): string {
   const c = entry.changes as Record<string, unknown>;
-  // Try to extract a meaningful name from the changes object
+  // _name is explicitly set by services to carry the entity title
+  if (c._name && typeof c._name === "string") return c._name;
+  // For create actions, title/name is set directly
   if (c.title && typeof c.title === "string") return c.title;
   if (c.name && typeof c.name === "string") return c.name;
-  // For updates, check nested { from, to } pattern
-  for (const val of Object.values(c)) {
-    if (val && typeof val === "object" && !Array.isArray(val)) {
-      const v = val as Record<string, unknown>;
-      if (v.to && typeof v.to === "string") return String(v.to).slice(0, 40);
-    }
-  }
+  // For updates where title changed, check the { from, to } on the title key
+  const titleChange = c.title as Record<string, unknown> | undefined;
+  if (titleChange?.to && typeof titleChange.to === "string") return titleChange.to;
   // Fallback to truncated entity ID
   return entry.entityId.slice(0, 8) + "…";
 }
 
 function describeChanges(entry: AuditLogEntry): string {
   const c = entry.changes as Record<string, unknown>;
-  const keys = Object.keys(c).filter(k => !["action"].includes(k));
+  const keys = Object.keys(c).filter(k => !["action", "_name"].includes(k));
 
   if (keys.length === 0) {
     if (entry.action === "delete") return "Permanently removed";

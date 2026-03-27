@@ -2,7 +2,7 @@ import { TaskRepository, type FindTasksOptions } from '@/lib/repositories/task.r
 import { AuditLogRepository } from '@/lib/repositories/audit-log.repository';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/utils/errors';
 import { getNow } from '@/lib/utils/dates';
-import type { Task, TaskStatus, TaskPriority, TaskDependency } from '@/lib/types';
+import type { Task, TaskStatus, TaskPriority, TaskDependency, AuditAction } from '@/lib/types';
 
 /** Valid status transitions to prevent invalid state changes. */
 const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
@@ -141,8 +141,9 @@ export class TaskService {
       }
     }
 
-    const action = input.status && input.status !== existing.status ? 'complete' : 'update';
-    this.auditLog.log(userId, 'task', id, input.status === 'done' ? 'complete' : action, changes);
+    const action: AuditAction = input.status === 'done' && existing.status !== 'done' ? 'complete' : 'update';
+    // Always include the task title so the audit log can show the entity name
+    this.auditLog.log(userId, 'task', id, action, { _name: existing.title, ...changes });
 
     return task;
   }
