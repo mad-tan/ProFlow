@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, Search, Sun, Moon, Timer, LogOut } from "lucide-react";
+import { Menu, Search, Sun, Moon, Timer, LogOut, Home } from "lucide-react";
+import Link from "next/link";
 import { SearchDialog } from "@/components/shared/search-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,19 @@ export function Topbar() {
           <Menu className="h-5 w-5" />
           <span className="sr-only">Open menu</span>
         </Button>
+
+        {/* Home button */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon" className="shrink-0">
+                <Home className="h-5 w-5" />
+                <span className="sr-only">Dashboard</span>
+              </Button>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent>Dashboard</TooltipContent>
+        </Tooltip>
 
         {/* Breadcrumbs */}
         <div className="hidden md:flex">

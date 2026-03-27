@@ -38,6 +38,7 @@ export default function ChecklistDetailPage() {
     checklist,
     isLoading,
     updateChecklist,
+    deleteChecklist,
     addItem,
     toggleItem,
     deleteItem,
