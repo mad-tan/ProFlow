@@ -8,6 +8,7 @@ import {
   Flame,
   Heart,
 } from "lucide-react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -19,23 +20,26 @@ interface StatCardProps {
   value: string | number;
   iconColor: string;
   iconBg: string;
+  href: string;
 }
 
-function StatCard({ icon: Icon, label, value, iconColor, iconBg }: StatCardProps) {
+function StatCard({ icon: Icon, label, value, iconColor, iconBg, href }: StatCardProps) {
   return (
-    <Card className="group relative overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
+    <Link href={href} className="block">
+      <Card className="group relative overflow-hidden transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer">
+        <CardContent className="p-5">
+          <div className="flex items-start justify-between">
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">{label}</p>
+              <p className="text-2xl font-bold tracking-tight">{value}</p>
+            </div>
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", iconBg)}>
+              <Icon className={cn("h-5 w-5", iconColor)} />
+            </div>
           </div>
-          <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", iconBg)}>
-            <Icon className={cn("h-5 w-5", iconColor)} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }
 
@@ -86,6 +90,7 @@ export function StatsCards() {
       value: summary?.activeProjects ?? 0,
       iconColor: "text-blue-600 dark:text-blue-400",
       iconBg: "bg-blue-500/10 dark:bg-blue-500/15",
+      href: "/projects",
     },
     {
       icon: CheckCircle2,
@@ -93,6 +98,7 @@ export function StatsCards() {
       value: summary?.activeTasks ?? 0,
       iconColor: "text-orange-600 dark:text-orange-400",
       iconBg: "bg-orange-500/10 dark:bg-orange-500/15",
+      href: "/tasks",
     },
     {
       icon: Trophy,
@@ -100,6 +106,7 @@ export function StatsCards() {
       value: summary?.completedToday ?? 0,
       iconColor: "text-emerald-600 dark:text-emerald-400",
       iconBg: "bg-emerald-500/10 dark:bg-emerald-500/15",
+      href: "/tasks?status=done",
     },
     {
       icon: Clock,
@@ -107,6 +114,7 @@ export function StatsCards() {
       value: formatMinutes(summary?.totalTimeToday ?? 0),
       iconColor: "text-purple-600 dark:text-purple-400",
       iconBg: "bg-purple-500/10 dark:bg-purple-500/15",
+      href: "/time-tracking",
     },
     {
       icon: Flame,
@@ -114,6 +122,7 @@ export function StatsCards() {
       value: `${summary?.currentStreak ?? 0}d`,
       iconColor: "text-red-600 dark:text-red-400",
       iconBg: "bg-red-500/10 dark:bg-red-500/15",
+      href: "/analytics",
     },
     {
       icon: Heart,
@@ -121,6 +130,7 @@ export function StatsCards() {
       value: summary?.moodAverage ? `${summary.moodAverage.toFixed(1)}/5` : "—",
       iconColor: "text-pink-600 dark:text-pink-400",
       iconBg: "bg-pink-500/10 dark:bg-pink-500/15",
+      href: "/mental-health",
     },
   ];
 

@@ -49,6 +49,13 @@ export class ProjectService {
   }
 
   /**
+   * List projects for a user with task counts included.
+   */
+  listByUserWithTaskCounts(userId: string, options?: FindProjectsOptions): ProjectWithTaskCount[] {
+    return this.repo.findByUserIdWithTaskCounts(userId, options);
+  }
+
+  /**
    * Create a new project.
    */
   create(input: CreateProjectInput): Project {
