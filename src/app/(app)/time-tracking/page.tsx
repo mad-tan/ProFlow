@@ -39,6 +39,8 @@ export default function TimeTrackingPage() {
     startDate: today,
     endDate: today,
   });
+  // Fetch recent entries for description autocomplete suggestions
+  const { timeEntries: recentEntries } = useTimeEntries({ pageSize: 50 });
   const {
     activeTimer,
     isLoading: timerLoading,
@@ -164,11 +166,25 @@ export default function TimeTrackingPage() {
                 00:00
               </div>
               <div className="flex items-center gap-2 w-full max-w-sm">
+                <datalist id="timer-desc-suggestions">
+                  {Array.from(
+                    new Set(
+                      (recentEntries ?? [])
+                        .map((e) => e.description)
+                        .filter(Boolean) as string[]
+                    )
+                  ).map((d) => (
+                    <option key={d} value={d} />
+                  ))}
+                </datalist>
                 <Input
                   placeholder="What are you working on?"
                   value={timerDesc}
                   onChange={(e) => setTimerDesc(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleStartTimer(); }}
                   className="flex-1"
+                  list="timer-desc-suggestions"
+                  autoComplete="off"
                 />
                 <Button size="lg" onClick={handleStartTimer}>
                   <Timer className="mr-2 h-5 w-5" />

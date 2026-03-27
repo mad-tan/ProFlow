@@ -100,20 +100,21 @@ export default function SettingsPage() {
     router.refresh();
   }
 
-  function handleExportData() {
-    const data = {
-      exported: new Date().toISOString(),
-      user: profile?.email,
-      note: "To export your full data, run: sqlite3 data/productivity.db .dump > backup.sql",
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `proflow-export-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Export info downloaded");
+  async function handleExportData() {
+    try {
+      const res = await fetch("/api/export");
+      if (!res.ok) { toast.error("Export failed"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `proflow-export-${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Data exported successfully");
+    } catch {
+      toast.error("Export failed");
+    }
   }
 
   return (
@@ -247,7 +248,7 @@ export default function SettingsPage() {
           </p>
           <Button variant="outline" size="sm" onClick={handleExportData}>
             <Download className="mr-2 h-4 w-4" />
-            Export Info
+            Export All Data
           </Button>
 
           <Separator />

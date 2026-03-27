@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Trash2,
   Pencil,
+  ExternalLink,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -38,11 +39,39 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// Renders text with URLs auto-linked
+function LinkedText({ text }: { text: string }) {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        urlRegex.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 break-all inline-flex items-center gap-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+            <ExternalLink className="h-3 w-3 shrink-0" />
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 export default function NotesPage() {
   const [search, setSearch] = useState("");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editNote, setEditNote] = useState<{ id: string; title: string; content: string } | null>(null);
+  const [viewNote, setViewNote] = useState<{ id: string; title: string; content: string; isPinned: boolean; createdAt: string } | null>(null);
 
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
@@ -64,6 +93,7 @@ export default function NotesPage() {
   }
 
   function openEdit(note: { id: string; title: string; content: string }) {
+    setViewNote(null);
     setEditNote(note);
     setFormTitle(note.title);
     setFormContent(note.content);
@@ -166,9 +196,10 @@ export default function NotesPage() {
             <Card
               key={note.id}
               className={cn(
-                "group relative transition-shadow hover:shadow-md",
+                "group relative transition-shadow hover:shadow-md cursor-pointer",
                 note.isPinned && "ring-1 ring-amber-400/60"
               )}
+              onClick={() => setViewNote(note)}
             >
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -178,45 +209,47 @@ export default function NotesPage() {
                     )}
                     <h3 className="text-sm font-semibold truncate">{note.title}</h3>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(note)}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => togglePin(note.id, note.isPinned)}
-                      >
-                        {note.isPinned ? (
-                          <>
-                            <PinOff className="mr-2 h-4 w-4" />
-                            Unpin
-                          </>
-                        ) : (
-                          <>
-                            <Pin className="mr-2 h-4 w-4" />
-                            Pin
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => deleteNote(note.id)}
-                        className="text-destructive"
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(note)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => togglePin(note.id, note.isPinned)}
+                        >
+                          {note.isPinned ? (
+                            <>
+                              <PinOff className="mr-2 h-4 w-4" />
+                              Unpin
+                            </>
+                          ) : (
+                            <>
+                              <Pin className="mr-2 h-4 w-4" />
+                              Pin
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => deleteNote(note.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
                 {note.content && (
                   <p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">
@@ -242,6 +275,47 @@ export default function NotesPage() {
           ))}
         </div>
       )}
+
+      {/* View Dialog */}
+      <Dialog open={!!viewNote} onOpenChange={(open) => !open && setViewNote(null)}>
+        <DialogContent className="sm:max-w-[560px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 pr-8">
+              {viewNote?.isPinned && <Pin className="h-4 w-4 text-amber-500 shrink-0" />}
+              <span className="truncate">{viewNote?.title}</span>
+            </DialogTitle>
+            {viewNote && (
+              <p className="text-xs text-muted-foreground">
+                {format(new Date(viewNote.createdAt), "MMMM d, yyyy")}
+              </p>
+            )}
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
+            {viewNote?.content ? (
+              <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                <LinkedText text={viewNote.content} />
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">No content.</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewNote) openEdit(viewNote);
+              }}
+            >
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              Edit
+            </Button>
+            <Button size="sm" onClick={() => setViewNote(null)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

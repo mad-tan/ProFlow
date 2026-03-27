@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Plus, ListTodo, LayoutGrid } from "lucide-react";
+import { Plus, ListTodo, LayoutGrid, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/hooks/use-tasks";
 import { useProjects } from "@/lib/hooks/use-projects";
@@ -242,9 +242,30 @@ export default function TasksPage() {
                   href={`/tasks/${task.id}`}
                   className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-accent/50"
                 >
+                  {/* Quick-done tick */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      updateTask(task.id, {
+                        status: task.status === "done" ? "todo" : "done",
+                      });
+                    }}
+                    className={cn(
+                      "flex items-center justify-center h-5 w-5 rounded-full border-2 shrink-0 transition-colors",
+                      task.status === "done"
+                        ? "bg-emerald-500 border-emerald-500 text-white"
+                        : "border-muted-foreground/40 hover:border-emerald-500"
+                    )}
+                    aria-label={task.status === "done" ? "Mark as to-do" : "Mark as done"}
+                  >
+                    {task.status === "done" && <Check className="h-3 w-3" />}
+                  </button>
+
                   <div
                     className={cn(
-                      "h-2.5 w-2.5 rounded-full shrink-0",
+                      "h-2 w-2 rounded-full shrink-0",
                       priorityDots[task.priority] ?? "bg-zinc-400"
                     )}
                   />
@@ -327,16 +348,40 @@ export default function TasksPage() {
                               draggedTaskId === task.id && "opacity-50"
                             )}
                           >
-                            <a
-                              href={`/tasks/${task.id}`}
-                              className="block"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <p className="text-sm font-medium truncate hover:underline">
-                                {task.title}
-                              </p>
-                            </a>
-                            <div className="flex items-center gap-2 mt-2">
+                            <div className="flex items-start gap-2">
+                              {/* Quick-done tick */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateTask(task.id, {
+                                    status: task.status === "done" ? "todo" : "done",
+                                  });
+                                }}
+                                className={cn(
+                                  "flex items-center justify-center h-4 w-4 rounded-full border-2 shrink-0 mt-0.5 transition-colors",
+                                  task.status === "done"
+                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                    : "border-muted-foreground/40 hover:border-emerald-500"
+                                )}
+                                aria-label={task.status === "done" ? "Mark as to-do" : "Mark as done"}
+                              >
+                                {task.status === "done" && <Check className="h-2.5 w-2.5" />}
+                              </button>
+                              <a
+                                href={`/tasks/${task.id}`}
+                                className="flex-1 min-w-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <p className={cn(
+                                  "text-sm font-medium truncate hover:underline",
+                                  task.status === "done" && "line-through text-muted-foreground"
+                                )}>
+                                  {task.title}
+                                </p>
+                              </a>
+                            </div>
+                            <div className="flex items-center gap-2 mt-2 flex-wrap">
                               <Badge
                                 variant="secondary"
                                 className={cn(
@@ -346,6 +391,14 @@ export default function TasksPage() {
                               >
                                 {task.priority}
                               </Badge>
+                              {task.projectId && (() => {
+                                const proj = (projects ?? []).find(p => p.id === task.projectId);
+                                return proj ? (
+                                  <span className="text-[10px] text-muted-foreground border rounded px-1 truncate max-w-[80px]">
+                                    {proj.name}
+                                  </span>
+                                ) : null;
+                              })()}
                               {task.dueDate && (
                                 <span className="text-[10px] text-muted-foreground">
                                   {new Date(
@@ -379,6 +432,7 @@ export default function TasksPage() {
                 placeholder="Task title"
                 value={formTitle}
                 onChange={(e) => setFormTitle(e.target.value)}
+                autoComplete="off"
               />
             </div>
             <div className="space-y-2">

@@ -212,6 +212,26 @@ export interface Note {
   updatedAt: string;
 }
 
+export interface Subtask {
+  id: string;
+  taskId: string;
+  userId: string;
+  title: string;
+  isCompleted: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Utility Types ──────────────────────────────────────────────────────────
 
 export interface DateRange {

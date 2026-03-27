@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import { migration001Initial } from "./001_initial";
 import { migration002Auth } from "./002_auth";
 import { migration003Notes } from "./003_notes";
+import { migration004SubtasksComments } from "./004_subtasks_comments";
 
 export interface Migration {
   id: string;
@@ -12,7 +13,7 @@ export interface Migration {
 /**
  * All migrations in order. Append new migrations to the end of this array.
  */
-const migrations: Migration[] = [migration001Initial, migration002Auth, migration003Notes];
+const migrations: Migration[] = [migration001Initial, migration002Auth, migration003Notes, migration004SubtasksComments];
 
 /**
  * Ensure the _migrations tracking table exists.

@@ -10,11 +10,16 @@ import {
   ListTodo,
   Save,
   Trash2,
+  Plus,
+  Check,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTask } from "@/lib/hooks/use-tasks";
 import { useTimeEntries } from "@/lib/hooks/use-time-tracking";
 import { useProjects } from "@/lib/hooks/use-projects";
+import { useSubtasks, useTaskComments } from "@/lib/hooks/use-subtasks";
 import type { TaskStatus, TaskPriority } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -58,10 +63,36 @@ export default function TaskDetailPage() {
   const { timeEntries, isLoading: timeLoading } = useTimeEntries({ taskId });
   const { projects } = useProjects();
   const project = task?.projectId ? projects?.find(p => p.id === task.projectId) : null;
+  const { subtasks, addSubtask, toggleSubtask, deleteSubtask } = useSubtasks(taskId);
+  const { comments, addComment, deleteComment } = useTaskComments(taskId);
 
   const [editTitle, setEditTitle] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [addingComment, setAddingComment] = useState(false);
+
+  async function handleAddSubtask() {
+    if (!newSubtask.trim()) return;
+    setAddingSubtask(true);
+    try {
+      await addSubtask(newSubtask.trim());
+      setNewSubtask("");
+    } catch (err) { console.error(err); }
+    finally { setAddingSubtask(false); }
+  }
+
+  async function handleAddComment() {
+    if (!newComment.trim()) return;
+    setAddingComment(true);
+    try {
+      await addComment(newComment.trim());
+      setNewComment("");
+    } catch (err) { console.error(err); }
+    finally { setAddingComment(false); }
+  }
 
   async function handleStatusChange(status: TaskStatus) {
     try {
@@ -246,6 +277,126 @@ export default function TaskDetailPage() {
             </CardContent>
           </Card>
 
+          {/* Subtasks */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Check className="h-4 w-4" />
+                Subtasks
+                {subtasks.length > 0 && (
+                  <span className="text-xs text-muted-foreground font-normal">
+                    {subtasks.filter(s => s.isCompleted).length}/{subtasks.length}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {subtasks.map((sub) => (
+                <div key={sub.id} className="flex items-center gap-2 group rounded-md px-2 py-1.5 hover:bg-accent/50">
+                  <button
+                    type="button"
+                    onClick={() => toggleSubtask(sub.id, sub.isCompleted)}
+                    className={cn(
+                      "flex items-center justify-center h-4 w-4 rounded border-2 shrink-0 transition-colors",
+                      sub.isCompleted
+                        ? "bg-emerald-500 border-emerald-500 text-white"
+                        : "border-muted-foreground/30 hover:border-primary"
+                    )}
+                  >
+                    {sub.isCompleted && <Check className="h-2.5 w-2.5" />}
+                  </button>
+                  <span className={cn("flex-1 text-sm", sub.isCompleted && "line-through text-muted-foreground")}>
+                    {sub.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => deleteSubtask(sub.id)}
+                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity text-xs"
+                    aria-label="Delete subtask"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              <div className="flex items-center gap-2 pt-2">
+                <Input
+                  placeholder="Add subtask..."
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddSubtask(); }}
+                  disabled={addingSubtask}
+                  className="h-8 text-sm"
+                  autoComplete="off"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddSubtask}
+                  disabled={!newSubtask.trim() || addingSubtask}
+                  className="h-8 px-2"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Comments */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Comments
+                {comments.length > 0 && (
+                  <span className="text-xs text-muted-foreground font-normal">{comments.length}</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {comments.map((comment) => (
+                <div key={comment.id} className="group rounded-lg border p-3 text-sm space-y-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="whitespace-pre-wrap flex-1">{comment.content}</p>
+                    <button
+                      type="button"
+                      onClick={() => deleteComment(comment.id)}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
+                      aria-label="Delete comment"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(comment.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+              <div className="flex items-start gap-2 pt-1">
+                <Textarea
+                  placeholder="Add a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  disabled={addingComment}
+                  rows={2}
+                  className="text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleAddComment();
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddComment}
+                  disabled={!newComment.trim() || addingComment}
+                  className="mt-0.5"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">⌘↵ to submit</p>
+            </CardContent>
+          </Card>
+
           {/* Time Entries */}
           <Card>
             <CardHeader>
@@ -357,15 +508,22 @@ export default function TaskDetailPage() {
 
               <Separator />
 
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">
                   Due Date
                 </Label>
-                <p className="text-sm">
-                  {task.dueDate
-                    ? new Date(task.dueDate + 'T12:00:00').toLocaleDateString()
-                    : "No due date"}
-                </p>
+                <Input
+                  type="date"
+                  value={task.dueDate ?? ""}
+                  onChange={async (e) => {
+                    try {
+                      await updateTask({ dueDate: e.target.value || null });
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  className="h-8 text-sm"
+                />
               </div>
 
               <div className="space-y-1">
