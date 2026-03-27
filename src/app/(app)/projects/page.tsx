@@ -192,8 +192,8 @@ export default function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map((project) => {
-            const taskCount = (project as any).task_count ?? 0;
-            const completedCount = (project as any).completed_task_count ?? 0;
+            const taskCount = (project as any).taskCount ?? 0;
+            const completedCount = (project as any).completedTaskCount ?? 0;
             const progress =
               taskCount > 0
                 ? Math.round((completedCount / taskCount) * 100)
