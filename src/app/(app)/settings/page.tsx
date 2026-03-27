@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { User, Palette, Lock, Database, Download, Moon, Sun, CheckCircle } from "lucide-react";
+import { User, Palette, Lock, Database, Download, Moon, Sun, CheckCircle, Check } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { useTheme } from "@/lib/contexts/theme-context";
+import { useTheme, BACKGROUND_PRESETS, AVATAR_COLORS } from "@/lib/contexts/theme-context";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 
 interface UserProfile {
@@ -21,7 +22,7 @@ interface UserProfile {
 }
 
 export default function SettingsPage() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, background, setBackground, avatarColor, setAvatarColor } = useTheme();
   const router = useRouter();
 
   // Profile state
@@ -169,7 +170,7 @@ export default function SettingsPage() {
             Appearance
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {theme === "dark" ? (
@@ -183,6 +184,73 @@ export default function SettingsPage() {
               </div>
             </div>
             <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+          </div>
+
+          <Separator />
+
+          {/* Avatar Color */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">Avatar Color</p>
+              <p className="text-xs text-muted-foreground">Choose your profile avatar color</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-12 w-12">
+                <AvatarFallback className="text-white text-lg font-semibold" style={{ backgroundColor: avatarColor }}>
+                  {name ? name.charAt(0).toUpperCase() : "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-wrap gap-2">
+                {AVATAR_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setAvatarColor(color)}
+                    className="relative h-8 w-8 rounded-full border-2 transition-all hover:scale-110"
+                    style={{
+                      backgroundColor: color,
+                      borderColor: avatarColor === color ? "white" : "transparent",
+                      boxShadow: avatarColor === color ? `0 0 0 2px ${color}` : "none",
+                    }}
+                    aria-label={`Select color ${color}`}
+                  >
+                    {avatarColor === color && (
+                      <Check className="h-4 w-4 text-white absolute inset-0 m-auto" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Background */}
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium">Background</p>
+              <p className="text-xs text-muted-foreground">Customize the main content area background</p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {BACKGROUND_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setBackground(preset.id)}
+                  className={`relative rounded-lg border-2 p-3 h-20 transition-all hover:scale-[1.02] ${
+                    background === preset.id
+                      ? "border-primary ring-1 ring-primary/30"
+                      : "border-border hover:border-muted-foreground/30"
+                  }`}
+                  style={preset.id !== "default" ? { ...preset.style, opacity: 1 } : {}}
+                >
+                  <span className="text-xs font-medium">{preset.label}</span>
+                  {background === preset.id && (
+                    <Check className="h-4 w-4 text-primary absolute top-2 right-2" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>

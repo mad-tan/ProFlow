@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, CheckSquare, MoreHorizontal, Trash2 } from "lucide-react";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
+import { Plus, CheckSquare, MoreHorizontal, Trash2, Search, ArrowUpDown } from "lucide-react";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { useChecklists } from "@/lib/hooks/use-checklists";
 import { PageHeader } from "@/components/layout/page-header";
@@ -50,18 +52,43 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function ChecklistsPage() {
   const { checklists, isLoading, createChecklist, deleteChecklist } = useChecklists();
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = usePersistedState<string>("proflow-checklists-sort", "created");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formTitle, setFormTitle] = useState("");
   const [formType, setFormType] = useState("custom");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const filteredChecklists = useMemo(() => {
+    let list = [...(checklists ?? [])];
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((cl) => cl.title.toLowerCase().includes(q));
+    }
+    switch (sortBy) {
+      case "title":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      case "type": {
+        return list.sort((a, b) => {
+          const aType = (a.metadata as any)?.type ?? "custom";
+          const bType = (b.metadata as any)?.type ?? "custom";
+          return aType.localeCompare(bType);
+        });
+      }
+      default:
+        return list;
+    }
+  }, [checklists, search, sortBy]);
+
   async function handleDelete(id: string) {
     setDeletingId(id);
     try {
       await deleteChecklist(id);
+      toast.success("Checklist deleted");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete checklist");
     } finally {
       setDeletingId(null);
     }
@@ -78,8 +105,10 @@ export default function ChecklistsPage() {
       setDialogOpen(false);
       setFormTitle("");
       setFormType("custom");
+      toast.success("Checklist created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create checklist");
     } finally {
       setSubmitting(false);
     }
@@ -98,13 +127,39 @@ export default function ChecklistsPage() {
         }
       />
 
+      {/* Filters */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search checklists..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+          <SelectTrigger className="w-[160px]">
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+              <SelectValue placeholder="Sort" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created">Date Created</SelectItem>
+            <SelectItem value="title">Title</SelectItem>
+            <SelectItem value="type">Type</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-36" />
           ))}
         </div>
-      ) : !checklists || checklists.length === 0 ? (
+      ) : !filteredChecklists || filteredChecklists.length === 0 ? (
         <EmptyState
           icon={CheckSquare}
           title="No checklists yet"
@@ -114,7 +169,7 @@ export default function ChecklistsPage() {
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {checklists.map((cl) => {
+          {filteredChecklists.map((cl) => {
             const meta = cl.metadata as any;
             const totalItems = meta?.totalItems ?? 0;
             const completedItems = meta?.completedItems ?? 0;
@@ -170,7 +225,7 @@ export default function ChecklistsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         disabled={deletingId === cl.id}
                       >
                         <MoreHorizontal className="h-4 w-4" />
@@ -195,7 +250,7 @@ export default function ChecklistsPage() {
 
       {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setFormTitle(""); setFormType("custom"); } }}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle>Create New Checklist</DialogTitle>
           </DialogHeader>

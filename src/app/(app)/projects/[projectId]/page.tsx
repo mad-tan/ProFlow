@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -120,8 +121,10 @@ export default function ProjectDetailPage() {
         status: editStatus,
       });
       setEditOpen(false);
+      toast.success("Project updated");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update project");
     } finally {
       setSubmitting(false);
     }
@@ -130,17 +133,21 @@ export default function ProjectDetailPage() {
   async function handleArchive() {
     try {
       await archiveProject();
+      toast.success("Project archived");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to archive project");
     }
   }
 
   async function handleDelete() {
     try {
       await deleteProject();
+      toast.success("Project deleted");
       router.push("/projects");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete project");
     }
   }
 
@@ -164,8 +171,10 @@ export default function ProjectDetailPage() {
         projectId,
       });
       setTaskOpen(false);
+      toast.success("Task created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create task");
     } finally {
       setTaskSubmitting(false);
     }

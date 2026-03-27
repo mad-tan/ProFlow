@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import { Plus, ListTodo, LayoutGrid, Check, ArrowUpDown } from "lucide-react";
 import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
@@ -67,9 +68,9 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function TasksPage() {
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
-  const [priorityFilter, setPriorityFilter] = useState<TaskPriority | "all">(
-    "all"
+  const [statusFilter, setStatusFilter] = usePersistedState<TaskStatus | "all">("proflow-tasks-status-filter", "all");
+  const [priorityFilter, setPriorityFilter] = usePersistedState<TaskPriority | "all">(
+    "proflow-tasks-priority-filter", "all"
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -129,8 +130,10 @@ export default function TasksPage() {
       });
       setDialogOpen(false);
       resetForm();
+      toast.success("Task created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create task");
     } finally {
       setSubmitting(false);
     }
@@ -443,6 +446,22 @@ export default function TasksPage() {
                                   ).toLocaleDateString()}
                                 </span>
                               )}
+                              {/* Touch-friendly status move (visible on mobile only) */}
+                              <select
+                                className="md:hidden text-[10px] bg-transparent border rounded px-1 py-0.5 text-muted-foreground appearance-none cursor-pointer"
+                                value={task.status}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  updateTask(task.id, { status: e.target.value as TaskStatus });
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label="Change status"
+                              >
+                                <option value="todo">To Do</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="in_review">In Review</option>
+                                <option value="done">Done</option>
+                              </select>
                             </div>
                           </div>
                         ))

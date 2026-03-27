@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -70,6 +71,7 @@ export default function ChecklistDetailPage() {
       setEditingTitle(false);
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update title");
     }
   }
 
@@ -81,6 +83,7 @@ export default function ChecklistDetailPage() {
       setNewItemContent("");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to add item");
     } finally {
       setAddingItem(false);
     }
@@ -91,6 +94,7 @@ export default function ChecklistDetailPage() {
       await toggleItem(itemId);
     } catch (err) {
       console.error(err);
+      toast.error("Failed to toggle item");
     }
   }
 
@@ -99,6 +103,7 @@ export default function ChecklistDetailPage() {
       await deleteItem(itemId);
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete item");
     }
   }
 
@@ -106,9 +111,11 @@ export default function ChecklistDetailPage() {
     setDeleting(true);
     try {
       await deleteChecklist();
+      toast.success("Checklist deleted");
       router.push("/checklists");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete checklist");
       setDeleting(false);
       setConfirmDelete(false);
     }
@@ -144,7 +151,7 @@ export default function ChecklistDetailPage() {
     <div className="space-y-6">
       {/* Confirm delete dialog */}
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -278,7 +285,7 @@ export default function ChecklistDetailPage() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-destructive"
+                    className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-destructive"
                     onClick={() => handleDeleteItem(item.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

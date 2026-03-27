@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import {
   Plus,
   Search,
@@ -8,7 +9,9 @@ import {
   MoreHorizontal,
   Archive,
   Trash2,
+  ArrowUpDown,
 } from "lucide-react";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { useProjects } from "@/lib/hooks/use-projects";
 import type { ProjectStatus } from "@/lib/types";
@@ -66,8 +69,9 @@ const PROJECT_COLORS = [
 
 export default function ProjectsPage() {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ProjectStatus | "all">("all");
-  const [showArchived, setShowArchived] = useState(false);
+  const [statusFilter, setStatusFilter] = usePersistedState<ProjectStatus | "all">("proflow-projects-status-filter", "all");
+  const [showArchived, setShowArchived] = usePersistedState<boolean>("proflow-projects-show-archived", false);
+  const [sortBy, setSortBy] = usePersistedState<string>("proflow-projects-sort", "created");
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const [formName, setFormName] = useState("");
@@ -83,10 +87,20 @@ export default function ProjectsPage() {
   const { projects, isLoading, createProject, archiveProject, deleteProject } =
     useProjects(filters as any);
 
-  const filteredProjects = (projects ?? []).filter((p) => {
-    if (!showArchived && p.status === "archived") return false;
-    return true;
-  });
+  const filteredProjects = useMemo(() => {
+    let list = (projects ?? []).filter((p) => {
+      if (!showArchived && p.status === "archived") return false;
+      return true;
+    });
+    switch (sortBy) {
+      case "name":
+        return list.sort((a, b) => a.name.localeCompare(b.name));
+      case "status":
+        return list.sort((a, b) => a.status.localeCompare(b.status));
+      default:
+        return list;
+    }
+  }, [projects, showArchived, sortBy]);
 
   async function handleCreate() {
     if (!formName.trim()) return;
@@ -100,8 +114,10 @@ export default function ProjectsPage() {
       });
       setDialogOpen(false);
       resetForm();
+      toast.success("Project created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create project");
     } finally {
       setSubmitting(false);
     }
@@ -151,6 +167,19 @@ export default function ProjectsPage() {
                 {opt.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+          <SelectTrigger className="w-[160px]">
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+              <SelectValue placeholder="Sort" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created">Date Created</SelectItem>
+            <SelectItem value="name">Name</SelectItem>
+            <SelectItem value="status">Status</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2">
@@ -229,13 +258,29 @@ export default function ProjectsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
-                        onClick={() => archiveProject(project.id)}
+                        onClick={async () => {
+                          try {
+                            await archiveProject(project.id);
+                            toast.success("Project archived");
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Failed to archive project");
+                          }
+                        }}
                       >
                         <Archive className="mr-2 h-4 w-4" />
                         Archive
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={() => deleteProject(project.id)}
+                        onClick={async () => {
+                          try {
+                            await deleteProject(project.id);
+                            toast.success("Project deleted");
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Failed to delete project");
+                          }
+                        }}
                         className="text-destructive"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />

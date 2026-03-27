@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import {
   Plus,
@@ -118,8 +119,10 @@ export default function RemindersPage() {
       setFormDesc("");
       setFormDateTime("");
       setFormFrequency("once");
+      toast.success("Reminder created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create reminder");
     } finally {
       setSubmitting(false);
     }
@@ -184,7 +187,15 @@ export default function RemindersPage() {
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground hover:text-foreground"
-                  onClick={() => dismissReminder(reminder.id)}
+                  onClick={async () => {
+                    try {
+                      await dismissReminder(reminder.id);
+                      toast.success("Reminder dismissed");
+                    } catch (err) {
+                      console.error(err);
+                      toast.error("Failed to dismiss reminder");
+                    }
+                  }}
                 >
                   <BellOff className="h-4 w-4 mr-1" />
                   Dismiss
@@ -194,7 +205,15 @@ export default function RemindersPage() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={() => deleteReminder(reminder.id)}
+                onClick={async () => {
+                  try {
+                    await deleteReminder(reminder.id);
+                    toast.success("Reminder deleted");
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Failed to delete reminder");
+                  }
+                }}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -269,7 +288,7 @@ export default function RemindersPage() {
 
       {/* Create Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setFormTitle(""); setFormDesc(""); setFormDateTime(""); setFormFrequency("once"); } }}>
-        <DialogContent className="sm:max-w-[460px]">
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create Reminder</DialogTitle>
           </DialogHeader>

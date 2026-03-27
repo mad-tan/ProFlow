@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import {
   Plus,
   Search,
@@ -11,8 +12,10 @@ import {
   Trash2,
   Pencil,
   ExternalLink,
+  ArrowUpDown,
 } from "lucide-react";
 import { format } from "date-fns";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { useNotes } from "@/lib/hooks/use-notes";
 import { PageHeader } from "@/components/layout/page-header";
@@ -25,6 +28,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +79,7 @@ function LinkedText({ text }: { text: string }) {
 export default function NotesPage() {
   const [search, setSearch] = useState("");
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [sortBy, setSortBy] = usePersistedState<string>("proflow-notes-sort", "created");
   const [createOpen, setCreateOpen] = useState(false);
   const [editNote, setEditNote] = useState<{ id: string; title: string; content: string } | null>(null);
   const [viewNote, setViewNote] = useState<{ id: string; title: string; content: string; isPinned: boolean; createdAt: string } | null>(null);
@@ -84,6 +95,19 @@ export default function NotesPage() {
   };
 
   const { notes, isLoading, createNote, updateNote, deleteNote, togglePin } = useNotes(filters);
+
+  const sortedNotes = useMemo(() => {
+    if (!notes) return [];
+    const list = [...notes];
+    switch (sortBy) {
+      case "title":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      case "updated":
+        return list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      default:
+        return list;
+    }
+  }, [notes, sortBy]);
 
   function openCreate() {
     setFormTitle("");
@@ -109,8 +133,10 @@ export default function NotesPage() {
         isPinned: formPinned,
       });
       setCreateOpen(false);
+      toast.success("Note created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create note");
     } finally {
       setSubmitting(false);
     }
@@ -125,8 +151,10 @@ export default function NotesPage() {
         content: formContent.trim(),
       });
       setEditNote(null);
+      toast.success("Note updated");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update note");
     } finally {
       setSubmitting(false);
     }
@@ -156,6 +184,19 @@ export default function NotesPage() {
             className="pl-9"
           />
         </div>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+          <SelectTrigger className="w-[160px]">
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+              <SelectValue placeholder="Sort" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created">Date Created</SelectItem>
+            <SelectItem value="title">Title</SelectItem>
+            <SelectItem value="updated">Last Updated</SelectItem>
+          </SelectContent>
+        </Select>
         <div className="flex items-center gap-2">
           <Switch
             id="pinned-only"
@@ -182,7 +223,7 @@ export default function NotesPage() {
             </Card>
           ))}
         </div>
-      ) : !notes || notes.length === 0 ? (
+      ) : !sortedNotes || sortedNotes.length === 0 ? (
         <EmptyState
           icon={StickyNote}
           title="No notes yet"
@@ -192,7 +233,7 @@ export default function NotesPage() {
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {notes.map((note) => (
+          {sortedNotes.map((note) => (
             <Card
               key={note.id}
               className={cn(
@@ -215,7 +256,7 @@ export default function NotesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0"
+                          className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -241,7 +282,15 @@ export default function NotesPage() {
                           )}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => deleteNote(note.id)}
+                          onClick={async () => {
+                            try {
+                              await deleteNote(note.id);
+                              toast.success("Note deleted");
+                            } catch (err) {
+                              console.error(err);
+                              toast.error("Failed to delete note");
+                            }
+                          }}
                           className="text-destructive"
                         >
                           <Trash2 className="mr-2 h-4 w-4" />

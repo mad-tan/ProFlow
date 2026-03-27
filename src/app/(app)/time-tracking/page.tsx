@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { Plus, Clock, Timer } from "lucide-react";
 import { useTimeEntries, useActiveTimer } from "@/lib/hooks/use-time-tracking";
 import { PageHeader } from "@/components/layout/page-header";
@@ -111,16 +112,20 @@ export default function TimeTrackingPage() {
     try {
       await startTimer(undefined, timerDesc || undefined);
       setTimerDesc("");
+      toast.success("Timer started");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to start timer");
     }
   }
 
   async function handleStopTimer() {
     try {
       await stopTimer();
+      toast.success("Timer stopped");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to stop timer");
     }
   }
 
@@ -130,6 +135,7 @@ export default function TimeTrackingPage() {
       await updateEntry(activeTimer.id, { description: editDescValue.trim() || undefined });
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update description");
     }
     setEditingDesc(false);
   }
@@ -147,8 +153,10 @@ export default function TimeTrackingPage() {
       setDesc("");
       setStartTime("");
       setEndTime("");
+      toast.success("Time entry added");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to add time entry");
     } finally {
       setSubmitting(false);
     }
@@ -363,7 +371,7 @@ export default function TimeTrackingPage() {
 
       {/* Manual Entry Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setDesc(""); setStartTime(""); setEndTime(""); } }}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle>Add Manual Entry</DialogTitle>
           </DialogHeader>

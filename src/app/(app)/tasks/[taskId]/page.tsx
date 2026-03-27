@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -81,7 +82,7 @@ export default function TaskDetailPage() {
     try {
       await addSubtask(newSubtask.trim());
       setNewSubtask("");
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); toast.error("Failed to add subtask"); }
     finally { setAddingSubtask(false); }
   }
 
@@ -91,7 +92,7 @@ export default function TaskDetailPage() {
     try {
       await addComment(newComment.trim());
       setNewComment("");
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error(err); toast.error("Failed to add comment"); }
     finally { setAddingComment(false); }
   }
 
@@ -100,6 +101,7 @@ export default function TaskDetailPage() {
       await updateTask({ status });
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update status");
     }
   }
 
@@ -108,6 +110,7 @@ export default function TaskDetailPage() {
       await updateTask({ priority });
     } catch (err) {
       console.error(err);
+      toast.error("Failed to update priority");
     }
   }
 
@@ -119,6 +122,7 @@ export default function TaskDetailPage() {
       setEditTitle(null);
     } catch (err) {
       console.error(err);
+      toast.error("Failed to save title");
     } finally {
       setSaving(false);
     }
@@ -132,6 +136,7 @@ export default function TaskDetailPage() {
       setEditDesc(null);
     } catch (err) {
       console.error(err);
+      toast.error("Failed to save description");
     } finally {
       setSaving(false);
     }
@@ -140,9 +145,11 @@ export default function TaskDetailPage() {
   async function handleDelete() {
     try {
       await deleteTask();
+      toast.success("Task deleted");
       router.push("/tasks");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to delete task");
     }
   }
 
@@ -502,7 +509,7 @@ export default function TaskDetailPage() {
                   onValueChange={async (v) => {
                     try {
                       await updateTask({ projectId: v === "none" ? null : v });
-                    } catch (err) { console.error(err); }
+                    } catch (err) { console.error(err); toast.error("Failed to update project"); }
                   }}
                 >
                   <SelectTrigger>
@@ -540,6 +547,7 @@ export default function TaskDetailPage() {
                       await updateTask({ dueDate: (e.target as HTMLInputElement).value || null });
                     } catch (err) {
                       console.error(err);
+                      toast.error("Failed to update due date");
                     }
                   }}
                   className="h-8 text-sm"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import {
   Plus,
@@ -135,8 +136,10 @@ export default function MentalHealthPage() {
       setStress(3);
       setSleepHours("");
       setNotes("");
+      toast.success("Check-in submitted");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to submit check-in");
     } finally {
       setCheckInSubmitting(false);
     }
@@ -153,8 +156,10 @@ export default function MentalHealthPage() {
       setJournalOpen(false);
       setJournalTitle("");
       setJournalContent("");
+      toast.success("Journal entry created");
     } catch (err) {
       console.error(err);
+      toast.error("Failed to create journal entry");
     } finally {
       setJournalSubmitting(false);
     }
@@ -462,7 +467,15 @@ export default function MentalHealthPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-destructive"
-                        onClick={() => deleteJournalEntry(entry.id)}
+                        onClick={async () => {
+                          try {
+                            await deleteJournalEntry(entry.id);
+                            toast.success("Journal entry deleted");
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Failed to delete journal entry");
+                          }
+                        }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

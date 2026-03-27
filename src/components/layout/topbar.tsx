@@ -35,7 +35,7 @@ function formatTime(totalSeconds: number): string {
 
 export function Topbar() {
   const { setIsOpen } = useSidebar();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, avatarColor } = useTheme();
   const { activeTimer, elapsedSeconds, isRunning, stopTimer } = useTimer();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -163,7 +163,7 @@ export function Topbar() {
             <DropdownMenuTrigger asChild>
               <button className="outline-none" aria-label="User menu">
                 <Avatar className="h-8 w-8 cursor-pointer">
-                  <AvatarFallback className="bg-indigo-600 text-white text-xs font-semibold">
+                  <AvatarFallback className="text-white text-xs font-semibold" style={{ backgroundColor: avatarColor }}>
                     U
                   </AvatarFallback>
                 </Avatar>
