@@ -215,7 +215,7 @@ export default function NotesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0"
                         >
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -318,7 +318,7 @@ export default function NotesPage() {
       </Dialog>
 
       {/* Create Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) { setFormTitle(""); setFormContent(""); setFormPinned(false); } }}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>New Note</DialogTitle>

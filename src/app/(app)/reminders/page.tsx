@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import {
   Plus,
   Bell,
@@ -67,6 +68,7 @@ export default function RemindersPage() {
   const [formDateTime, setFormDateTime] = useState("");
   const [formFrequency, setFormFrequency] = useState<ReminderFrequency>("once");
   const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = usePersistedState<string>("proflow-reminders-tab", "upcoming");
 
   const now = new Date();
 
@@ -244,7 +246,7 @@ export default function RemindersPage() {
           ))}
         </div>
       ) : (
-        <Tabs defaultValue="upcoming">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
             <TabsTrigger value="upcoming">
               Upcoming ({upcoming.length})
@@ -266,7 +268,7 @@ export default function RemindersPage() {
       )}
 
       {/* Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setFormTitle(""); setFormDesc(""); setFormDateTime(""); setFormFrequency("once"); } }}>
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>Create Reminder</DialogTitle>

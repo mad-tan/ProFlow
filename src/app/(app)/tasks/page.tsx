@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Plus, ListTodo, LayoutGrid, Check } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { Plus, ListTodo, LayoutGrid, Check, ArrowUpDown } from "lucide-react";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/hooks/use-tasks";
 import { useProjects } from "@/lib/hooks/use-projects";
@@ -82,6 +83,8 @@ export default function TasksPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = usePersistedState<string>("proflow-tasks-view", "list");
+  const [sortBy, setSortBy] = usePersistedState<string>("proflow-tasks-sort", "created");
 
   const filters: TaskFilters = {};
   if (statusFilter !== "all") filters.status = statusFilter as TaskStatus;
@@ -91,7 +94,26 @@ export default function TasksPage() {
   const { tasks, isLoading, createTask, updateTask } = useTasks(filters);
   const { projects } = useProjects();
 
-  const allTasks = tasks ?? [];
+  const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+
+  const allTasks = useMemo(() => {
+    const list = [...(tasks ?? [])];
+    switch (sortBy) {
+      case "due_date":
+        return list.sort((a, b) => {
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return a.dueDate.localeCompare(b.dueDate);
+        });
+      case "priority":
+        return list.sort((a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4));
+      case "title":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      default:
+        return list;
+    }
+  }, [tasks, sortBy]);
 
   async function handleCreate() {
     if (!formTitle.trim()) return;
@@ -205,9 +227,23 @@ export default function TasksPage() {
             <SelectItem value="none">None</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+          <SelectTrigger className="w-[150px]">
+            <div className="flex items-center gap-1.5">
+              <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+              <SelectValue placeholder="Sort" />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created">Date Created</SelectItem>
+            <SelectItem value="due_date">Due Date</SelectItem>
+            <SelectItem value="priority">Priority</SelectItem>
+            <SelectItem value="title">Title</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <Tabs defaultValue="list">
+      <Tabs value={viewMode} onValueChange={setViewMode}>
         <TabsList>
           <TabsTrigger value="list" className="gap-1.5">
             <ListTodo className="h-4 w-4" />
@@ -421,7 +457,7 @@ export default function TasksPage() {
       </Tabs>
 
       {/* Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create New Task</DialogTitle>

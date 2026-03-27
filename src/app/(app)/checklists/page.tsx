@@ -170,7 +170,7 @@ export default function ChecklistsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         disabled={deletingId === cl.id}
                       >
                         <MoreHorizontal className="h-4 w-4" />
@@ -194,7 +194,7 @@ export default function ChecklistsPage() {
       )}
 
       {/* Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setFormTitle(""); setFormType("custom"); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Create New Checklist</DialogTitle>

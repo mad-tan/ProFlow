@@ -312,7 +312,7 @@ export default function TaskDetailPage() {
                   <button
                     type="button"
                     onClick={() => deleteSubtask(sub.id)}
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity text-xs"
+                    className="sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity text-xs"
                     aria-label="Delete subtask"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -361,7 +361,7 @@ export default function TaskDetailPage() {
                     <button
                       type="button"
                       onClick={() => deleteComment(comment.id)}
-                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
+                      className="sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive shrink-0 transition-opacity"
                       aria-label="Delete comment"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

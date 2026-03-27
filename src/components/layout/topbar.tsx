@@ -7,7 +7,7 @@ import Link from "next/link";
 import { SearchDialog } from "@/components/shared/search-dialog";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useSidebar } from "@/lib/contexts/sidebar-context";
 import { useTheme } from "@/lib/contexts/theme-context";
 import { useTimer } from "@/lib/contexts/timer-context";
@@ -161,9 +161,8 @@ export function Topbar() {
           {/* User avatar with dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="outline-none">
+              <button className="outline-none" aria-label="User menu">
                 <Avatar className="h-8 w-8 cursor-pointer">
-                  <AvatarImage src="" alt="User" />
                   <AvatarFallback className="bg-indigo-600 text-white text-xs font-semibold">
                     U
                   </AvatarFallback>

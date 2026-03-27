@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import {
   Plus,
   Heart,
@@ -99,6 +100,8 @@ export default function MentalHealthPage() {
     deleteJournalEntry,
   } = useJournalEntries();
 
+  const [activeTab, setActiveTab] = usePersistedState<string>("proflow-mentalhealth-tab", "checkin");
+
   // Check-in form state
   const [mood, setMood] = useState<MoodRating>(3);
   const [energy, setEnergy] = useState<EnergyLevel>(3);
@@ -166,7 +169,7 @@ export default function MentalHealthPage() {
         description="Track your mood, energy, and journal your thoughts"
       />
 
-      <Tabs defaultValue="checkin">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="checkin" className="gap-1.5">
             <Heart className="h-4 w-4" />
@@ -458,7 +461,7 @@ export default function MentalHealthPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-destructive"
+                        className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-destructive"
                         onClick={() => deleteJournalEntry(entry.id)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -484,7 +487,7 @@ export default function MentalHealthPage() {
           )}
 
           {/* Journal Dialog */}
-          <Dialog open={journalOpen} onOpenChange={setJournalOpen}>
+          <Dialog open={journalOpen} onOpenChange={(open) => { setJournalOpen(open); if (!open) { setJournalTitle(""); setJournalContent(""); } }}>
             <DialogContent className="sm:max-w-[520px]">
               <DialogHeader>
                 <DialogTitle>New Journal Entry</DialogTitle>

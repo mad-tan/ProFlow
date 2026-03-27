@@ -222,7 +222,7 @@ export default function ProjectsPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
@@ -279,7 +279,7 @@ export default function ProjectsPage() {
       )}
 
       {/* Create Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setFormName(""); setFormDescription(""); setFormStatus("active"); setFormColor(PROJECT_COLORS[5]); } }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create New Project</DialogTitle>

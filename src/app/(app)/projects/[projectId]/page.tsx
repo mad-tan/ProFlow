@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -11,7 +11,10 @@ import {
   Clock,
   FolderKanban,
   Plus,
+  Search,
+  ArrowUpDown,
 } from "lucide-react";
+import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { useProject } from "@/lib/hooks/use-projects";
 import { useTasks } from "@/lib/hooks/use-tasks";
@@ -93,6 +96,12 @@ export default function ProjectDetailPage() {
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskStatus, setTaskStatus] = useState<TaskStatus>("todo");
   const [taskSubmitting, setTaskSubmitting] = useState(false);
+
+  // Task filter/sort state
+  const [taskSearch, setTaskSearch] = useState("");
+  const [taskStatusFilter, setTaskStatusFilter] = useState<string>("all");
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState<string>("all");
+  const [taskSortBy, setTaskSortBy] = usePersistedState<string>("proflow-project-tasks-sort", "created");
 
   function openEdit() {
     if (!project) return;
@@ -194,6 +203,42 @@ export default function ProjectDetailPage() {
     tasks?.filter((t) => t.status === "in_progress").length ?? 0;
   const progress =
     totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+
+  const filteredTasks = useMemo(() => {
+    let list = [...(tasks ?? [])];
+    if (taskSearch) {
+      const q = taskSearch.toLowerCase();
+      list = list.filter((t) => t.title.toLowerCase().includes(q));
+    }
+    if (taskStatusFilter !== "all") {
+      list = list.filter((t) => t.status === taskStatusFilter);
+    }
+    if (taskPriorityFilter !== "all") {
+      list = list.filter((t) => t.priority === taskPriorityFilter);
+    }
+    switch (taskSortBy) {
+      case "due_date":
+        list.sort((a, b) => {
+          if (!a.dueDate && !b.dueDate) return 0;
+          if (!a.dueDate) return 1;
+          if (!b.dueDate) return -1;
+          return a.dueDate.localeCompare(b.dueDate);
+        });
+        break;
+      case "priority":
+        list.sort((a, b) => (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4));
+        break;
+      case "title":
+        list.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case "status":
+        list.sort((a, b) => a.status.localeCompare(b.status));
+        break;
+    }
+    return list;
+  }, [tasks, taskSearch, taskStatusFilter, taskPriorityFilter, taskSortBy]);
 
   return (
     <div className="space-y-6">
@@ -333,11 +378,65 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-4 space-y-4">
-          <div className="flex justify-end">
-            <Button size="sm" onClick={openCreateTask}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Task
-            </Button>
+          {/* Task filters toolbar */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Search tasks..."
+                value={taskSearch}
+                onChange={(e) => setTaskSearch(e.target.value)}
+                className="pl-8 h-9 text-sm"
+              />
+            </div>
+            <Select value={taskStatusFilter} onValueChange={setTaskStatusFilter}>
+              <SelectTrigger className="w-[140px] h-9 text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="backlog">Backlog</SelectItem>
+                <SelectItem value="todo">To Do</SelectItem>
+                <SelectItem value="in_progress">In Progress</SelectItem>
+                <SelectItem value="in_review">In Review</SelectItem>
+                <SelectItem value="done">Done</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={taskPriorityFilter} onValueChange={setTaskPriorityFilter}>
+              <SelectTrigger className="w-[140px] h-9 text-sm">
+                <SelectValue placeholder="Priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priorities</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="none">None</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={taskSortBy} onValueChange={setTaskSortBy}>
+              <SelectTrigger className="w-[140px] h-9 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <ArrowUpDown className="h-3 w-3 shrink-0" />
+                  <SelectValue placeholder="Sort" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="created">Date Created</SelectItem>
+                <SelectItem value="due_date">Due Date</SelectItem>
+                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="title">Title</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="sm:ml-auto">
+              <Button size="sm" onClick={openCreateTask}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Task
+              </Button>
+            </div>
           </div>
           {tasksLoading ? (
             <div className="space-y-3">
@@ -353,9 +452,13 @@ export default function ProjectDetailPage() {
               actionLabel="New Task"
               onAction={openCreateTask}
             />
+          ) : filteredTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No tasks match your filters.
+            </p>
           ) : (
             <div className="space-y-2">
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <a
                   key={task.id}
                   href={`/tasks/${task.id}`}
@@ -383,7 +486,7 @@ export default function ProjectDetailPage() {
                       </p>
                     )}
                   </div>
-                  <Badge variant="outline" className="text-xs shrink-0">
+                  <Badge variant="outline" className="text-xs shrink-0 hidden sm:inline-flex">
                     {taskStatusLabels[task.status] ?? task.status}
                   </Badge>
                 </a>
@@ -394,7 +497,7 @@ export default function ProjectDetailPage() {
       </Tabs>
 
       {/* Create Task Dialog */}
-      <Dialog open={taskOpen} onOpenChange={setTaskOpen}>
+      <Dialog open={taskOpen} onOpenChange={(open) => { setTaskOpen(open); if (!open) { setTaskTitle(""); setTaskPriority("none"); setTaskDueDate(""); setTaskStatus("todo"); } }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>New Task</DialogTitle>

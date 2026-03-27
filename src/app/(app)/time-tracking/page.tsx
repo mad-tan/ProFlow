@@ -362,7 +362,7 @@ export default function TimeTrackingPage() {
       </Card>
 
       {/* Manual Entry Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { setDesc(""); setStartTime(""); setEndTime(""); } }}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Add Manual Entry</DialogTitle>
