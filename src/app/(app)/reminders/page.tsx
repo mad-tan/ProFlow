@@ -71,29 +71,25 @@ export default function RemindersPage() {
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = usePersistedState<string>("proflow-reminders-tab", "upcoming");
 
-  const now = new Date();
+  const upcoming = useMemo(() => {
+    const now = Date.now();
+    return (reminders ?? [])
+      .filter((r) => r.isActive && new Date(r.remindAt).getTime() >= now)
+      .sort(
+        (a, b) =>
+          new Date(a.remindAt).getTime() - new Date(b.remindAt).getTime()
+      );
+  }, [reminders]);
 
-  const upcoming = useMemo(
-    () =>
-      (reminders ?? [])
-        .filter((r) => r.isActive && new Date(r.remindAt) >= now)
-        .sort(
-          (a, b) =>
-            new Date(a.remindAt).getTime() - new Date(b.remindAt).getTime()
-        ),
-    [reminders, now]
-  );
-
-  const past = useMemo(
-    () =>
-      (reminders ?? [])
-        .filter((r) => !r.isActive || new Date(r.remindAt) < now)
-        .sort(
-          (a, b) =>
-            new Date(b.remindAt).getTime() - new Date(a.remindAt).getTime()
-        ),
-    [reminders, now]
-  );
+  const past = useMemo(() => {
+    const now = Date.now();
+    return (reminders ?? [])
+      .filter((r) => !r.isActive || new Date(r.remindAt).getTime() < now)
+      .sort(
+        (a, b) =>
+          new Date(b.remindAt).getTime() - new Date(a.remindAt).getTime()
+      );
+  }, [reminders]);
 
   const all = useMemo(
     () =>
@@ -129,7 +125,7 @@ export default function RemindersPage() {
   }
 
   function ReminderCard({ reminder }: { reminder: (typeof all)[0] }) {
-    const isPast = new Date(reminder.remindAt) < now;
+    const isPast = new Date(reminder.remindAt).getTime() < Date.now();
     return (
       <Card
         className={cn(
