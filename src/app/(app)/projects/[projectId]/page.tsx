@@ -180,32 +180,6 @@ export default function ProjectDetailPage() {
     }
   }
 
-  if (projectLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-4 w-96" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!project) {
-    return (
-      <EmptyState
-        icon={FolderKanban}
-        title="Project not found"
-        description="This project may have been deleted."
-        actionLabel="Back to Projects"
-        onAction={() => router.push("/projects")}
-      />
-    );
-  }
-
   const totalTasks = tasks?.length ?? 0;
   const completedTasks = tasks?.filter((t) => t.status === "done").length ?? 0;
   const inProgressTasks =
@@ -248,6 +222,32 @@ export default function ProjectDetailPage() {
     }
     return list;
   }, [tasks, taskSearch, taskStatusFilter, taskPriorityFilter, taskSortBy]);
+
+  if (projectLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <EmptyState
+        icon={FolderKanban}
+        title="Project not found"
+        description="This project may have been deleted."
+        actionLabel="Back to Projects"
+        onAction={() => router.push("/projects")}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
