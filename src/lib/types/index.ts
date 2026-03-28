@@ -232,6 +232,125 @@ export interface TaskComment {
   updatedAt: string;
 }
 
+// ─── Job Hunt Types ─────────────────────────────────────────────────────────
+
+export type JobListingStatus = "saved" | "applied" | "interviewing" | "offered" | "rejected" | "archived";
+export type ApplicationStatus = "pending" | "submitted" | "viewed" | "interview" | "rejected" | "offered";
+export type ApplicationVia = "direct" | "linkedin" | "referral" | "cold_email";
+export type ColdEmailStatus = "drafted" | "sent" | "replied" | "bounced";
+export type LinkedInOutreachStatus = "drafted" | "sent" | "connected" | "replied";
+
+export interface ParsedResume {
+  name: string;
+  email: string;
+  phone: string;
+  location: string;
+  summary: string;
+  links: { type: string; url: string }[];
+}
+
+export interface ResumeExperience {
+  company: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+  achievements: string[];
+}
+
+export interface ResumeEducation {
+  school: string;
+  degree: string;
+  field: string;
+  gradDate: string;
+  gpa?: string;
+}
+
+export interface Resume {
+  id: string;
+  userId: string;
+  fileName: string;
+  filePath: string;
+  rawText: string;
+  parsedData: ParsedResume;
+  skills: string[];
+  experience: ResumeExperience[];
+  education: ResumeEducation[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JobListing {
+  id: string;
+  userId: string;
+  title: string;
+  company: string;
+  location: string;
+  salaryRange: string | null;
+  jobType: string | null;
+  url: string | null;
+  description: string;
+  requirements: string[];
+  score: number | null;
+  scoreReasons: string[];
+  source: string | null;
+  status: JobListingStatus;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  appliedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Application {
+  id: string;
+  userId: string;
+  listingId: string;
+  resumeVersion: string | null;
+  coverLetter: string | null;
+  appliedVia: ApplicationVia;
+  appliedAt: string | null;
+  status: ApplicationStatus;
+  notes: string | null;
+  followUpDate: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ColdEmail {
+  id: string;
+  userId: string;
+  listingId: string | null;
+  recipientName: string;
+  recipientEmail: string;
+  recipientTitle: string | null;
+  company: string;
+  subject: string;
+  body: string;
+  status: ColdEmailStatus;
+  sentAt: string | null;
+  followUpCount: number;
+  lastFollowUpAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkedInOutreach {
+  id: string;
+  userId: string;
+  listingId: string | null;
+  personName: string;
+  personTitle: string | null;
+  personUrl: string | null;
+  company: string;
+  message: string;
+  status: LinkedInOutreachStatus;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Utility Types ──────────────────────────────────────────────────────────
 
 export interface DateRange {
