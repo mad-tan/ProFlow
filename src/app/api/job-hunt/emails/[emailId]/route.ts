@@ -12,7 +12,7 @@ export async function GET(
   try {
     const service = new JobHuntService();
     const { emailId } = await params;
-    const email = service.getEmail(emailId);
+    const email = service.getEmail(emailId, await getCurrentUserId());
     return successResponse(email);
   } catch (error) {
     return errorResponse(error);

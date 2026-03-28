@@ -299,29 +299,38 @@ export default function JobDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {(tailoredData.tailoredResume as Record<string, unknown>)?.atsKeywords && (
-              <div>
-                <p className="text-sm font-medium mb-1">ATS Keywords Injected:</p>
-                <div className="flex flex-wrap gap-1">
-                  {((tailoredData.tailoredResume as Record<string, unknown>)?.atsKeywords as string[])?.map((kw) => (
-                    <Badge key={kw} variant="secondary" className="text-xs">{kw}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {(tailoredData.tailoredResume as Record<string, unknown>)?.changes && (
-              <div>
-                <p className="text-sm font-medium mb-1">Changes Made:</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  {((tailoredData.tailoredResume as Record<string, unknown>)?.changes as string[])?.map((c, i) => (
-                    <li key={i} className="flex items-start gap-1.5">
-                      <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 shrink-0" />
-                      {c}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {(() => {
+              const tr = tailoredData.tailoredResume as Record<string, unknown> | undefined;
+              const keywords = Array.isArray(tr?.atsKeywords) ? tr.atsKeywords as string[] : [];
+              const changes = Array.isArray(tr?.changes) ? tr.changes as string[] : [];
+              return (
+                <>
+                  {keywords.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium mb-1">ATS Keywords Injected:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {keywords.map((kw) => (
+                          <Badge key={kw} variant="secondary" className="text-xs">{kw}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {changes.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium mb-1">Changes Made:</p>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        {changes.map((c, i) => (
+                          <li key={i} className="flex items-start gap-1.5">
+                            <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 shrink-0" />
+                            {c}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
             {tailoredData.coverLetter && (
               <div>
                 <p className="text-sm font-medium mb-1">Cover Letter:</p>
@@ -362,7 +371,7 @@ export default function JobDetailPage() {
               </CardContent>
             </Card>
           )}
-          {job.requirements && job.requirements.length > 0 && (
+          {Array.isArray(job.requirements) && job.requirements.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Requirements</CardTitle></CardHeader>
               <CardContent>
@@ -376,7 +385,7 @@ export default function JobDetailPage() {
               </CardContent>
             </Card>
           )}
-          {job.scoreReasons && job.scoreReasons.length > 0 && (
+          {Array.isArray(job.scoreReasons) && job.scoreReasons.length > 0 && (
             <Card>
               <CardHeader><CardTitle className="text-base">Why This Score</CardTitle></CardHeader>
               <CardContent>

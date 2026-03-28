@@ -12,7 +12,7 @@ export async function GET(
   try {
     const service = new JobHuntService();
     const { outreachId } = await params;
-    const outreach = service.getOutreach(outreachId);
+    const outreach = service.getOutreach(outreachId, await getCurrentUserId());
     return successResponse(outreach);
   } catch (error) {
     return errorResponse(error);

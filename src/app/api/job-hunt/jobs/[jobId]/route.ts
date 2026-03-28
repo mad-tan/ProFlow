@@ -12,7 +12,7 @@ export async function GET(
   try {
     const service = new JobHuntService();
     const { jobId } = await params;
-    const job = service.getJob(jobId);
+    const job = service.getJob(jobId, await getCurrentUserId());
     return successResponse(job);
   } catch (error) {
     return errorResponse(error);

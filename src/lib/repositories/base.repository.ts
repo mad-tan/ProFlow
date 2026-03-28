@@ -29,13 +29,14 @@ function snakeToCamel(str: string): string {
  */
 /** Columns that are stored as INTEGER 0/1 but should be returned as boolean. */
 const BOOLEAN_COLUMNS = new Set(['is_template', 'is_completed', 'is_active', 'is_pinned']);
+const JSON_COLUMNS = new Set(['metadata', 'preferences', 'tags', 'parsedData', 'skills', 'experience', 'education', 'requirements', 'scoreReasons', 'links']);
 
 function rowToEntity<T>(row: Record<string, unknown>): T {
   const entity: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
     const camelKey = snakeToCamel(key);
-    // Try to parse JSON strings for metadata/preferences/tags columns
-    if (typeof value === 'string' && (camelKey === 'metadata' || camelKey === 'preferences' || camelKey === 'tags')) {
+    // Try to parse JSON strings for known JSON columns
+    if (typeof value === 'string' && JSON_COLUMNS.has(camelKey)) {
       try { entity[camelKey] = JSON.parse(value); } catch { entity[camelKey] = value; }
     } else if (BOOLEAN_COLUMNS.has(key) && typeof value === 'number') {
       entity[camelKey] = value === 1;

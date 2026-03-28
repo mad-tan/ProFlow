@@ -36,6 +36,11 @@ export async function POST(request: NextRequest) {
       return errorResponse(new Error('Invalid file type. Upload a PDF or DOCX.'), 'Invalid file type');
     }
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      return errorResponse(new Error('File too large. Maximum size is 10MB.'), 'File too large');
+    }
+
     // Save file to disk
     const uploadsDir = join(process.cwd(), 'data', 'resumes', userId);
     await mkdir(uploadsDir, { recursive: true });
@@ -43,14 +48,11 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(filePath, buffer);
 
-    // Parse the resume
-    const parsed = await parseResumePDF(buffer, file.name);
+    // Capture existing resume ID before creating new one
+    const existingResumeId = service.getResume(userId)?.id;
 
-    // Delete existing resume if any
-    const existing = service.getResume(userId);
-    if (existing) {
-      service.deleteResume(existing.id, userId);
-    }
+    // Parse the resume first (before deleting old one, so we don't lose data on parse failure)
+    const parsed = await parseResumePDF(buffer, file.name);
 
     const resume = service.createResume({
       userId,
@@ -62,6 +64,11 @@ export async function POST(request: NextRequest) {
       experience: parsed.experience as unknown as Record<string, unknown>[],
       education: parsed.education as unknown as Record<string, unknown>[],
     });
+
+    // Delete old resume after successful creation of new one
+    if (existingResumeId) {
+      service.deleteResume(existingResumeId, userId);
+    }
 
     return createdResponse(resume);
   } catch (error) {

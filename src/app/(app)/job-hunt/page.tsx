@@ -76,7 +76,7 @@ export default function JobHuntPage() {
     setSearching(true);
     try {
       const results = await searchJobs(searchQuery || undefined, searchLocation || undefined, undefined, 10);
-      toast.success(`Found ${results.length} jobs matching your profile!`);
+      toast.success(`Found ${(results ?? []).length} jobs matching your profile!`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to search for jobs");
@@ -137,7 +137,7 @@ export default function JobHuntPage() {
                 <div>
                   <p className="font-medium">{resume.parsedData?.name || resume.fileName}</p>
                   <p className="text-sm text-muted-foreground">
-                    {resume.skills?.length ?? 0} skills detected &middot; {resume.experience?.length ?? 0} experiences &middot; {resume.education?.length ?? 0} education entries
+                    {(Array.isArray(resume.skills) ? resume.skills : []).length} skills detected &middot; {(Array.isArray(resume.experience) ? resume.experience : []).length} experiences &middot; {(Array.isArray(resume.education) ? resume.education : []).length} education entries
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -152,7 +152,7 @@ export default function JobHuntPage() {
                   </Button>
                 </div>
               </div>
-              {resume.skills && resume.skills.length > 0 && (
+              {Array.isArray(resume.skills) && resume.skills.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {resume.skills.slice(0, 15).map((skill) => (
                     <Badge key={skill} variant="secondary" className="text-xs">{skill}</Badge>
@@ -307,7 +307,7 @@ export default function JobHuntPage() {
                         {job.salaryRange && ` &middot; ${job.salaryRange}`}
                       </p>
                       <div className="flex items-center gap-2">
-                        {job.tags?.slice(0, 3).map((tag) => (
+                        {(Array.isArray(job.tags) ? job.tags : []).slice(0, 3).map((tag) => (
                           <Badge key={tag} variant="outline" className="text-[10px]">{tag}</Badge>
                         ))}
                         <Badge variant={

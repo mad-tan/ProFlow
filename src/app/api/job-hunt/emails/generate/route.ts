@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     if (followUp && originalEmailId) {
       // Generate follow-up email
-      const original = service.getEmail(originalEmailId);
+      const original = service.getEmail(originalEmailId, userId);
       const result = await generateFollowUp(
         original.subject,
         original.body,

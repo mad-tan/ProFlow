@@ -130,9 +130,10 @@ export class JobHuntService {
     return this.listingRepo.findByUserId(userId, options);
   }
 
-  getJob(id: string): JobListing {
+  getJob(id: string, userId?: string): JobListing {
     const job = this.listingRepo.findById(id);
     if (!job) throw new NotFoundError('JobListing', id);
+    if (userId && job.userId !== userId) throw new NotFoundError('JobListing', id);
     return job;
   }
 
@@ -184,9 +185,10 @@ export class JobHuntService {
     return this.applicationRepo.findByUserId(userId, options);
   }
 
-  getApplication(id: string): Application {
+  getApplication(id: string, userId?: string): Application {
     const app = this.applicationRepo.findById(id);
     if (!app) throw new NotFoundError('Application', id);
+    if (userId && app.userId !== userId) throw new NotFoundError('Application', id);
     return app;
   }
 
@@ -232,9 +234,10 @@ export class JobHuntService {
     return this.emailRepo.findByUserId(userId, options);
   }
 
-  getEmail(id: string): ColdEmail {
+  getEmail(id: string, userId?: string): ColdEmail {
     const email = this.emailRepo.findById(id);
     if (!email) throw new NotFoundError('ColdEmail', id);
+    if (userId && email.userId !== userId) throw new NotFoundError('ColdEmail', id);
     return email;
   }
 
@@ -278,9 +281,10 @@ export class JobHuntService {
     return this.outreachRepo.findByUserId(userId, options);
   }
 
-  getOutreach(id: string): LinkedInOutreach {
+  getOutreach(id: string, userId?: string): LinkedInOutreach {
     const outreach = this.outreachRepo.findById(id);
     if (!outreach) throw new NotFoundError('LinkedInOutreach', id);
+    if (userId && outreach.userId !== userId) throw new NotFoundError('LinkedInOutreach', id);
     return outreach;
   }
 
