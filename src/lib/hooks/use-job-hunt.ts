@@ -1,5 +1,5 @@
 import useSWR, { mutate } from "swr";
-import type { Resume, JobListing, Application, ColdEmail, LinkedInOutreach } from "@/lib/types";
+import type { Resume, JobListing, Application, ColdEmail, LinkedInOutreach, SearchJobsResponse, PipelineResponse } from "@/lib/types";
 import { fetcher, apiPost, apiPatch, apiDelete } from "./use-fetch";
 
 // ─── Cache Invalidation ─────────────────────────────────────────────────────
@@ -94,11 +94,29 @@ export function useJobListings(filters?: JobListingFilters) {
       await invalidateJobs();
     },
 
-    async searchJobs(query?: string, location?: string, jobType?: string, count?: number): Promise<JobListing[]> {
-      const results = await apiPost<JobListing[]>("/api/job-hunt/jobs/search", {
-        query, location, jobType, count,
+    async searchJobs(query?: string, location?: string, dateAfter?: string): Promise<SearchJobsResponse> {
+      const results = await apiPost<SearchJobsResponse>("/api/job-hunt/jobs/search", {
+        query, location, dateAfter,
       });
       await invalidateJobs();
+      return results;
+    },
+
+    async loadMore(searchSessionId: string): Promise<SearchJobsResponse> {
+      const results = await apiPost<SearchJobsResponse>("/api/job-hunt/jobs/search/more", {
+        searchSessionId,
+      });
+      await invalidateJobs();
+      return results;
+    },
+
+    async runPipeline(query: string, location?: string, dateAfter?: string): Promise<PipelineResponse> {
+      const results = await apiPost<PipelineResponse>("/api/job-hunt/jobs/pipeline", {
+        query, location, dateAfter,
+      });
+      await invalidateJobs();
+      await invalidateEmails();
+      await invalidateOutreaches();
       return results;
     },
 
@@ -189,6 +207,14 @@ export function useColdEmails(listingId?: string) {
     async generateEmail(data: Record<string, unknown>): Promise<{ subject: string; body: string }> {
       return apiPost<{ subject: string; body: string }>("/api/job-hunt/emails/generate", data);
     },
+
+    async generateBatch(jobIds: string[], style?: string): Promise<{ emails: ColdEmail[]; count: number }> {
+      const result = await apiPost<{ emails: ColdEmail[]; count: number }>("/api/job-hunt/emails/batch", {
+        jobIds, style,
+      });
+      await invalidateEmails();
+      return result;
+    },
   };
 }
 
@@ -227,6 +253,14 @@ export function useLinkedInOutreaches(listingId?: string) {
     async generateMessage(data: Record<string, unknown>): Promise<{ message: string }> {
       return apiPost<{ message: string }>("/api/job-hunt/outreaches/generate", data);
     },
+
+    async generateBatch(jobIds: string[], approach?: string): Promise<{ outreaches: LinkedInOutreach[]; count: number }> {
+      const result = await apiPost<{ outreaches: LinkedInOutreach[]; count: number }>("/api/job-hunt/outreaches/batch", {
+        jobIds, approach,
+      });
+      await invalidateOutreaches();
+      return result;
+    },
   };
 }
 
@@ -236,6 +270,26 @@ export function useTailorResume() {
   return {
     async tailorForJob(data: Record<string, unknown>) {
       return apiPost<Record<string, unknown>>("/api/job-hunt/resume/tailor", data);
+    },
+  };
+}
+
+// ─── Recruiter Discovery Hook ───────────────────────────────────────────
+
+export interface DiscoveredRecruiter {
+  name: string;
+  title: string;
+  linkedinUrl: string;
+  email: string;
+  source: string;
+}
+
+export function useRecruiterFinder() {
+  return {
+    async findRecruiters(company: string, domain?: string): Promise<{ recruiters: DiscoveredRecruiter[]; count: number }> {
+      return apiPost<{ recruiters: DiscoveredRecruiter[]; count: number }>("/api/job-hunt/recruiters", {
+        company, domain,
+      });
     },
   };
 }

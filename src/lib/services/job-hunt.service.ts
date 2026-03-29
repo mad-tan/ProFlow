@@ -3,9 +3,10 @@ import { JobListingRepository, type FindJobListingsOptions } from '@/lib/reposit
 import { ApplicationRepository, type FindApplicationsOptions } from '@/lib/repositories/application.repository';
 import { ColdEmailRepository, type FindColdEmailsOptions } from '@/lib/repositories/cold-email.repository';
 import { LinkedInOutreachRepository, type FindLinkedInOutreachesOptions } from '@/lib/repositories/linkedin-outreach.repository';
+import { SearchSessionRepository } from '@/lib/repositories/search-session.repository';
 import { AuditLogRepository } from '@/lib/repositories/audit-log.repository';
 import { NotFoundError } from '@/lib/utils/errors';
-import type { Resume, JobListing, Application, ColdEmail, LinkedInOutreach } from '@/lib/types';
+import type { Resume, JobListing, Application, ColdEmail, LinkedInOutreach, SearchSession } from '@/lib/types';
 
 // ─── Service Inputs ─────────────────────────────────────────────────────────
 
@@ -74,12 +75,23 @@ export interface CreateLinkedInOutreachInput {
 
 // ─── Service ────────────────────────────────────────────────────────────────
 
+export interface CreateSearchSessionInput {
+  userId: string;
+  query: string;
+  location?: string;
+  siteFilter?: string;
+  dateFilter?: string | null;
+  totalResults?: number;
+  nextStart?: number;
+}
+
 export class JobHuntService {
   private resumeRepo = new ResumeRepository();
   private listingRepo = new JobListingRepository();
   private applicationRepo = new ApplicationRepository();
   private emailRepo = new ColdEmailRepository();
   private outreachRepo = new LinkedInOutreachRepository();
+  private searchSessionRepo = new SearchSessionRepository();
   private auditLog = new AuditLogRepository();
 
   // ── Resumes ──────────────────────────────────────────────────────────────
@@ -317,5 +329,29 @@ export class JobHuntService {
     const deleted = this.outreachRepo.delete(id);
     if (deleted) this.auditLog.log(userId, 'linkedin_outreach', id, 'delete');
     return deleted;
+  }
+
+  // ── Search Sessions ─────────────────────────────────────────────────────
+
+  createSearchSession(input: CreateSearchSessionInput): SearchSession {
+    return this.searchSessionRepo.create({
+      userId: input.userId,
+      query: input.query,
+      location: input.location ?? '',
+      siteFilter: input.siteFilter ?? '',
+      dateFilter: input.dateFilter ?? null,
+      totalResults: input.totalResults ?? 0,
+      nextStart: input.nextStart ?? 11,
+    } as Omit<SearchSession, 'id' | 'createdAt' | 'updatedAt'>);
+  }
+
+  getSearchSession(id: string): SearchSession {
+    const session = this.searchSessionRepo.findById(id);
+    if (!session) throw new NotFoundError('SearchSession', id);
+    return session;
+  }
+
+  updateSearchSession(id: string, input: Partial<SearchSession>): SearchSession {
+    return this.searchSessionRepo.update(id, input);
   }
 }

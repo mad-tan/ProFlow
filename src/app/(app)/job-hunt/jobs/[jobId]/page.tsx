@@ -19,8 +19,23 @@ import {
   CheckCircle,
   Plus,
   Send,
+  Download,
+  Users,
+  Search,
+  CheckSquare,
+  Square,
+  MailPlus,
 } from "lucide-react";
-import { useJobListings, useResume, useColdEmails, useLinkedInOutreaches, useApplications, useTailorResume } from "@/lib/hooks/use-job-hunt";
+import {
+  useJobListings,
+  useResume,
+  useColdEmails,
+  useLinkedInOutreaches,
+  useApplications,
+  useTailorResume,
+  useRecruiterFinder,
+  type DiscoveredRecruiter,
+} from "@/lib/hooks/use-job-hunt";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +70,7 @@ export default function JobDetailPage() {
   const { emails, createEmail, generateEmail } = useColdEmails(jobId);
   const { outreaches, createOutreach, generateMessage } = useLinkedInOutreaches(jobId);
   const { tailorForJob } = useTailorResume();
+  const { findRecruiters } = useRecruiterFinder();
 
   const job = jobs?.find((j) => j.id === jobId);
 
@@ -63,12 +79,17 @@ export default function JobDetailPage() {
   const [tailoredData, setTailoredData] = useState<Record<string, unknown> | null>(null);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [linkedinDialogOpen, setLinkedinDialogOpen] = useState(false);
+  const [recruiterDialogOpen, setRecruiterDialogOpen] = useState(false);
   const [generatingEmail, setGeneratingEmail] = useState(false);
   const [generatingLinkedin, setGeneratingLinkedin] = useState(false);
-  const [emailForm, setEmailForm] = useState({ recipientName: "", recipientEmail: "", recipientTitle: "", subject: "", body: "", style: "formal" as const });
-  const [linkedinForm, setLinkedinForm] = useState({ personName: "", personTitle: "", personUrl: "", message: "", approach: "referral" as const });
+  const [findingRecruiters, setFindingRecruiters] = useState(false);
+  const [recruiters, setRecruiters] = useState<DiscoveredRecruiter[]>([]);
+  const [selectedRecruiters, setSelectedRecruiters] = useState<Set<number>>(new Set());
+  const [emailForm, setEmailForm] = useState({ recipientName: "", recipientEmail: "", recipientTitle: "", subject: "", body: "", style: "formal" as "formal" | "casual" | "bold" });
+  const [linkedinForm, setLinkedinForm] = useState({ personName: "", personTitle: "", personUrl: "", message: "", approach: "referral" as "referral" | "informational" | "direct" });
 
-  // Actions
+  // ─── Actions ─────────────────────────────────────────────────────────────
+
   const handleTailor = useCallback(async () => {
     if (!resume) { toast.error("Upload your resume first"); return; }
     setTailoring(true);
@@ -83,6 +104,116 @@ export default function JobDetailPage() {
       setTailoring(false);
     }
   }, [resume, jobId, tailorForJob]);
+
+  const handleDownloadPDF = useCallback(async () => {
+    if (!tailoredData || !resume) return;
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF();
+      const tr = tailoredData.tailoredResume as Record<string, unknown>;
+      const orig = tailoredData.originalResume as Record<string, unknown>;
+      const name = String(orig?.name ?? resume.parsedData?.name ?? "Candidate");
+      const email = String(orig?.email ?? resume.parsedData?.email ?? "");
+      const phone = String(orig?.phone ?? resume.parsedData?.phone ?? "");
+      const location = String(orig?.location ?? resume.parsedData?.location ?? "");
+
+      let y = 20;
+      const lm = 15;
+      const maxW = 180;
+
+      // Header
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.text(name, lm, y);
+      y += 7;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      const contactParts = [email, phone, location].filter(Boolean);
+      doc.text(contactParts.join(" | "), lm, y);
+      y += 10;
+
+      // Summary
+      if (tr?.summary) {
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("PROFESSIONAL SUMMARY", lm, y);
+        y += 6;
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const summaryLines = doc.splitTextToSize(String(tr.summary), maxW);
+        doc.text(summaryLines, lm, y);
+        y += summaryLines.length * 5 + 5;
+      }
+
+      // Skills
+      const skills = Array.isArray(tr?.skills) ? tr.skills as string[] : [];
+      if (skills.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("SKILLS", lm, y);
+        y += 6;
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        const skillLines = doc.splitTextToSize(skills.join(", "), maxW);
+        doc.text(skillLines, lm, y);
+        y += skillLines.length * 5 + 5;
+      }
+
+      // Experience
+      const experience = Array.isArray(tr?.experience) ? tr.experience as Record<string, unknown>[] : [];
+      if (experience.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("EXPERIENCE", lm, y);
+        y += 6;
+
+        for (const exp of experience) {
+          if (y > 270) { doc.addPage(); y = 20; }
+          doc.setFontSize(11);
+          doc.setFont("helvetica", "bold");
+          doc.text(`${exp.title} at ${exp.company}`, lm, y);
+          y += 5;
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "italic");
+          doc.text(`${exp.startDate} - ${exp.endDate}`, lm, y);
+          y += 5;
+
+          const achievements = Array.isArray(exp.achievements) ? exp.achievements as string[] : [];
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(10);
+          for (const ach of achievements) {
+            if (y > 275) { doc.addPage(); y = 20; }
+            const achLines = doc.splitTextToSize(`• ${ach}`, maxW - 5);
+            doc.text(achLines, lm + 3, y);
+            y += achLines.length * 5;
+          }
+          y += 3;
+        }
+      }
+
+      // Education
+      const education = Array.isArray(orig?.education) ? orig.education as Record<string, unknown>[] : [];
+      if (education.length > 0) {
+        if (y > 260) { doc.addPage(); y = 20; }
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("EDUCATION", lm, y);
+        y += 6;
+        for (const edu of education) {
+          doc.setFontSize(10);
+          doc.setFont("helvetica", "normal");
+          doc.text(`${edu.degree} in ${edu.field} — ${edu.school}`, lm, y);
+          y += 5;
+        }
+      }
+
+      doc.save(`${name.replace(/\s+/g, "_")}_Tailored_Resume.pdf`);
+      toast.success("Resume PDF downloaded!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate PDF");
+    }
+  }, [tailoredData, resume]);
 
   const handleApply = useCallback(async () => {
     try {
@@ -100,6 +231,73 @@ export default function JobDetailPage() {
       toast.error("Failed to track application");
     }
   }, [jobId, job, createApplication, updateJob]);
+
+  // ─── Recruiter Discovery ─────────────────────────────────────────────────
+
+  const handleFindRecruiters = useCallback(async () => {
+    if (!job) return;
+    setFindingRecruiters(true);
+    setRecruiterDialogOpen(true);
+    try {
+      const result = await findRecruiters(job.company);
+      setRecruiters(result.recruiters);
+      setSelectedRecruiters(new Set(result.recruiters.map((_, i) => i)));
+      toast.success(`Found ${result.count} contacts at ${job.company}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to find recruiters");
+    } finally {
+      setFindingRecruiters(false);
+    }
+  }, [job, findRecruiters]);
+
+  const toggleRecruiter = (idx: number) => {
+    setSelectedRecruiters(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const toggleAllRecruiters = () => {
+    if (selectedRecruiters.size === recruiters.length) {
+      setSelectedRecruiters(new Set());
+    } else {
+      setSelectedRecruiters(new Set(recruiters.map((_, i) => i)));
+    }
+  };
+
+  const handleCopyBCC = useCallback(() => {
+    const selected = recruiters.filter((_, i) => selectedRecruiters.has(i));
+    const bcc = selected.map(r => r.email).filter(e => e.includes("@")).join(", ");
+    if (!bcc) { toast.error("No emails to copy"); return; }
+    navigator.clipboard.writeText(bcc);
+    toast.success(`Copied ${selected.length} emails to BCC!`);
+  }, [recruiters, selectedRecruiters]);
+
+  const handleSendToRecruiters = useCallback(async () => {
+    if (!job || !resume) return;
+    const name = resume.parsedData?.name ?? "Candidate";
+    const selected = recruiters.filter((_, i) => selectedRecruiters.has(i));
+
+    for (const r of selected) {
+      await createEmail({
+        listingId: jobId,
+        recipientName: r.name,
+        recipientEmail: r.email,
+        recipientTitle: r.title,
+        company: job.company,
+        subject: `Interest in ${job.title} Role at ${job.company}`,
+        body: `Hi,\n\nI hope you're doing well.\n\nI came across the ${job.title} position at ${job.company} and believe it aligns perfectly with my skills and experience. I'm highly interested in applying for this role.\n\nCould you share any insights or advice about the role and the team? I've attached my resume for your reference and would appreciate it if you could forward it to the hiring team.\n\nThank you for your time and assistance.\n\nBest regards,\n${name}`,
+        status: "drafted",
+      });
+    }
+    toast.success(`Created ${selected.length} email drafts!`);
+    setRecruiterDialogOpen(false);
+  }, [job, resume, jobId, recruiters, selectedRecruiters, createEmail]);
+
+  // ─── Email ───────────────────────────────────────────────────────────────
 
   const handleGenerateEmail = useCallback(async () => {
     setGeneratingEmail(true);
@@ -146,6 +344,8 @@ export default function JobDetailPage() {
     window.open(mailto);
   }, [emailForm]);
 
+  // ─── LinkedIn ────────────────────────────────────────────────────────────
+
   const handleGenerateLinkedin = useCallback(async () => {
     setGeneratingLinkedin(true);
     try {
@@ -184,6 +384,8 @@ export default function JobDetailPage() {
       toast.error("Failed to save outreach");
     }
   }, [linkedinForm, jobId, job, createOutreach]);
+
+  // ─── Other ───────────────────────────────────────────────────────────────
 
   const handleDelete = useCallback(async () => {
     try {
@@ -237,6 +439,7 @@ export default function JobDetailPage() {
             <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5" />{job.company}</span>
             <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{job.location || "Remote"}</span>
             {job.salaryRange && <span className="flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{job.salaryRange}</span>}
+            {job.source && <Badge variant="secondary" className="text-[10px]">{job.source}</Badge>}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -264,27 +467,34 @@ export default function JobDetailPage() {
         </div>
       </div>
 
-      {/* 3 Action Buttons */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* 4 Action Buttons */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-2 border-blue-500/20 hover:border-blue-500/40 transition-colors cursor-pointer" onClick={handleTailor}>
           <CardContent className="py-6 text-center">
             {tailoring ? <Loader2 className="h-8 w-8 mx-auto text-blue-500 animate-spin mb-2" /> : <FileText className="h-8 w-8 mx-auto text-blue-500 mb-2" />}
-            <p className="font-semibold text-sm">Apply with Tailor</p>
-            <p className="text-xs text-muted-foreground mt-1">AI-tailored resume + ATS optimization</p>
+            <p className="font-semibold text-sm">Tailor Resume</p>
+            <p className="text-xs text-muted-foreground mt-1">AI-optimized for ATS</p>
+          </CardContent>
+        </Card>
+        <Card className="border-2 border-orange-500/20 hover:border-orange-500/40 transition-colors cursor-pointer" onClick={handleFindRecruiters}>
+          <CardContent className="py-6 text-center">
+            {findingRecruiters ? <Loader2 className="h-8 w-8 mx-auto text-orange-500 animate-spin mb-2" /> : <Users className="h-8 w-8 mx-auto text-orange-500 mb-2" />}
+            <p className="font-semibold text-sm">Find Recruiters</p>
+            <p className="text-xs text-muted-foreground mt-1">Discover contacts + emails</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-green-500/20 hover:border-green-500/40 transition-colors cursor-pointer" onClick={() => setEmailDialogOpen(true)}>
           <CardContent className="py-6 text-center">
             <Mail className="h-8 w-8 mx-auto text-green-500 mb-2" />
             <p className="font-semibold text-sm">Cold Email</p>
-            <p className="text-xs text-muted-foreground mt-1">Find recruiters & send personalized emails</p>
+            <p className="text-xs text-muted-foreground mt-1">Write to hiring team</p>
           </CardContent>
         </Card>
         <Card className="border-2 border-purple-500/20 hover:border-purple-500/40 transition-colors cursor-pointer" onClick={() => setLinkedinDialogOpen(true)}>
           <CardContent className="py-6 text-center">
             <Linkedin className="h-8 w-8 mx-auto text-purple-500 mb-2" />
-            <p className="font-semibold text-sm">LinkedIn Reachout</p>
-            <p className="text-xs text-muted-foreground mt-1">Draft referral connection requests</p>
+            <p className="font-semibold text-sm">LinkedIn Reach</p>
+            <p className="text-xs text-muted-foreground mt-1">Connection requests</p>
           </CardContent>
         </Card>
       </div>
@@ -322,7 +532,7 @@ export default function JobDetailPage() {
                         {changes.map((c, i) => (
                           <li key={i} className="flex items-start gap-1.5">
                             <CheckCircle className="h-3 w-3 text-green-500 mt-0.5 shrink-0" />
-                            {c}
+                            {String(c)}
                           </li>
                         ))}
                       </ul>
@@ -334,11 +544,15 @@ export default function JobDetailPage() {
             {tailoredData.coverLetter && (
               <div>
                 <p className="text-sm font-medium mb-1">Cover Letter:</p>
-                <pre className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted rounded-lg p-3">{tailoredData.coverLetter as string}</pre>
+                <pre className="text-sm text-muted-foreground whitespace-pre-wrap bg-muted rounded-lg p-3">{String(tailoredData.coverLetter)}</pre>
               </div>
             )}
-            <div className="flex gap-2">
-              <Button size="sm" onClick={handleApply} disabled={alreadyApplied}>
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" onClick={handleDownloadPDF}>
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                Download Tailored Resume (PDF)
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleApply} disabled={alreadyApplied}>
                 <Target className="mr-1.5 h-3.5 w-3.5" />
                 {alreadyApplied ? "Already Applied" : "Mark as Applied"}
               </Button>
@@ -378,7 +592,7 @@ export default function JobDetailPage() {
                 <ul className="space-y-1">
                   {job.requirements.map((req, i) => (
                     <li key={i} className="text-sm flex items-start gap-2">
-                      <span className="text-muted-foreground">•</span> {req}
+                      <span className="text-muted-foreground">&bull;</span> {req}
                     </li>
                   ))}
                 </ul>
@@ -413,16 +627,21 @@ export default function JobDetailPage() {
                         <p className="text-xs text-muted-foreground mt-0.5">Subject: {email.subject}</p>
                         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{email.body}</p>
                       </div>
-                      <Badge variant={email.status === "sent" ? "default" : email.status === "replied" ? "secondary" : "outline"}>
-                        {email.status}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { navigator.clipboard.writeText(email.body); toast.success("Copied!"); }}>
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Badge variant={email.status === "sent" ? "default" : email.status === "replied" ? "secondary" : "outline"}>
+                          {email.status}
+                        </Badge>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No emails yet. Click &quot;Cold Email&quot; above to get started.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No emails yet. Click &quot;Cold Email&quot; or &quot;Find Recruiters&quot; to get started.</p>
           )}
         </TabsContent>
 
@@ -438,20 +657,25 @@ export default function JobDetailPage() {
                         <p className="text-xs text-muted-foreground mt-1">{o.message}</p>
                         {o.personUrl && (
                           <a href={o.personUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary mt-1 inline-flex items-center gap-1">
-                            View Profile <ExternalLink className="h-3 w-3" />
+                            {o.personUrl.includes("/people/") ? "Search Recruiters on LinkedIn" : "View Profile"} <ExternalLink className="h-3 w-3" />
                           </a>
                         )}
                       </div>
-                      <Badge variant={o.status === "connected" ? "default" : o.status === "replied" ? "secondary" : "outline"}>
-                        {o.status}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { navigator.clipboard.writeText(o.message); toast.success("Copied!"); }}>
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Badge variant={o.status === "connected" ? "default" : o.status === "replied" ? "secondary" : "outline"}>
+                          {o.status}
+                        </Badge>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No LinkedIn outreaches yet. Click &quot;LinkedIn Reachout&quot; above to get started.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No LinkedIn outreaches yet.</p>
           )}
         </TabsContent>
 
@@ -478,6 +702,73 @@ export default function JobDetailPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Recruiter Discovery Dialog */}
+      <Dialog open={recruiterDialogOpen} onOpenChange={setRecruiterDialogOpen}>
+        <DialogContent className="sm:max-w-[640px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Recruiters at {job.company}
+            </DialogTitle>
+          </DialogHeader>
+          {findingRecruiters ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mr-3" />
+              <span>Searching for recruiters...</span>
+            </div>
+          ) : recruiters.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={toggleAllRecruiters}>
+                  {selectedRecruiters.size === recruiters.length ? <CheckSquare className="mr-1.5 h-3.5 w-3.5" /> : <Square className="mr-1.5 h-3.5 w-3.5" />}
+                  {selectedRecruiters.size === recruiters.length ? "Deselect All" : "Select All"}
+                </Button>
+                <span className="text-sm text-muted-foreground">{selectedRecruiters.size} selected</span>
+              </div>
+              <div className="space-y-2">
+                {recruiters.map((r, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${selectedRecruiters.has(i) ? "border-primary bg-primary/5" : ""}`}
+                  >
+                    <button onClick={() => toggleRecruiter(i)} className="shrink-0">
+                      {selectedRecruiters.has(i) ? <CheckSquare className="h-5 w-5 text-primary" /> : <Square className="h-5 w-5 text-muted-foreground" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{r.name}</p>
+                      <p className="text-xs text-muted-foreground">{r.title}</p>
+                      <p className="text-xs text-primary">{r.email}</p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {r.linkedinUrl && (
+                        <a href={r.linkedinUrl} target="_blank" rel="noopener noreferrer">
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <Linkedin className="h-3.5 w-3.5" />
+                          </Button>
+                        </a>
+                      )}
+                      <Badge variant="outline" className="text-[10px]">{r.source}</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">No recruiters found. Try configuring SERP_API_KEY or HUNTER_API_KEY for better results.</p>
+          )}
+          <DialogFooter className="flex-wrap gap-2">
+            <Button variant="outline" onClick={handleCopyBCC} disabled={selectedRecruiters.size === 0}>
+              <Copy className="mr-1.5 h-3.5 w-3.5" />
+              Copy to BCC ({selectedRecruiters.size})
+            </Button>
+            <Button onClick={handleSendToRecruiters} disabled={selectedRecruiters.size === 0}>
+              <MailPlus className="mr-1.5 h-3.5 w-3.5" />
+              Create Email Drafts ({selectedRecruiters.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Cold Email Dialog */}
       <Dialog open={emailDialogOpen} onOpenChange={(open) => { setEmailDialogOpen(open); if (!open) setEmailForm({ recipientName: "", recipientEmail: "", recipientTitle: "", subject: "", body: "", style: "formal" }); }}>
         <DialogContent className="sm:max-w-[560px]">
@@ -502,7 +793,7 @@ export default function JobDetailPage() {
               </div>
               <div className="space-y-2">
                 <Label>Style</Label>
-                <Select value={emailForm.style} onValueChange={v => setEmailForm(f => ({ ...f, style: v as "formal" | "casual" | "bold" }))}>
+                <Select value={emailForm.style} onValueChange={(v: "formal" | "casual" | "bold") => setEmailForm(f => ({ ...f, style: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="formal">Formal</SelectItem>
@@ -562,7 +853,7 @@ export default function JobDetailPage() {
               </div>
               <div className="space-y-2">
                 <Label>Approach</Label>
-                <Select value={linkedinForm.approach} onValueChange={v => setLinkedinForm(f => ({ ...f, approach: v as "referral" | "informational" | "direct" }))}>
+                <Select value={linkedinForm.approach} onValueChange={(v: "referral" | "informational" | "direct") => setLinkedinForm(f => ({ ...f, approach: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="referral">Referral Ask</SelectItem>

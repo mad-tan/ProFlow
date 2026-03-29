@@ -14,42 +14,40 @@ export async function POST(request: NextRequest) {
     const resume = service.getResume(userId);
 
     if (!resume) {
-      return errorResponse(new Error('No resume uploaded. Please upload your resume first.'));
+      return errorResponse(new Error('No resume uploaded.'));
     }
 
     const body = await request.json();
-    const { query, location, dateAfter } = body;
+    const { searchSessionId } = body;
 
-    if (!query) {
-      return errorResponse(new Error('Search query is required.'));
+    if (!searchSessionId) {
+      return errorResponse(new Error('searchSessionId is required.'));
     }
 
-    // 1. Search Google for real job URLs
-    const searchResults = await searchGoogleJobs(query, {
-      location,
-      dateAfter: dateAfter ?? getYesterday(),
+    const session = service.getSearchSession(searchSessionId);
+
+    if (session.nextStart <= 0) {
+      return successResponse({ jobs: [], hasMore: false, totalResults: session.totalResults });
+    }
+
+    // Search next page
+    const searchResults = await searchGoogleJobs(session.query, {
+      location: session.location || undefined,
+      dateAfter: session.dateFilter || undefined,
+      start: session.nextStart,
     });
 
     if (searchResults.items.length === 0) {
-      return successResponse({
-        jobs: [],
-        searchSessionId: null,
-        hasMore: false,
-        totalResults: 0,
-      });
+      service.updateSearchSession(session.id, { nextStart: 0 });
+      return successResponse({ jobs: [], hasMore: false, totalResults: session.totalResults });
     }
 
-    // 2. Create search session for pagination
-    const session = service.createSearchSession({
-      userId,
-      query,
-      location: location ?? '',
-      dateFilter: dateAfter ?? getYesterday(),
-      totalResults: searchResults.totalResults,
-      nextStart: searchResults.nextStartIndex ?? 11,
+    // Update session pagination
+    service.updateSearchSession(session.id, {
+      nextStart: searchResults.nextStartIndex ?? 0,
     });
 
-    // 3. Scrape only job pages that don't already have descriptions from board APIs
+    // Scrape only pages without pre-extracted descriptions
     const urlsToScrape = searchResults.items
       .filter(item => !item.description)
       .map(item => item.link);
@@ -58,7 +56,7 @@ export async function POST(request: NextRequest) {
       ? await scrapeJobPages(urlsToScrape)
       : new Map<string, null>();
 
-    // 4. Save jobs to DB and collect for scoring
+    // Save jobs and collect for scoring
     const jobsForScoring: { title: string; company: string; description: string; requirements: string[] }[] = [];
     const savedJobs: ReturnType<typeof service.createJob>[] = [];
 
@@ -85,7 +83,6 @@ export async function POST(request: NextRequest) {
         tags: [],
       });
 
-      // Update with search session and scrape timestamp
       service.updateJob(savedJob.id, userId, {
         searchSessionId: session.id,
         scrapedAt: data ? getNow() : null,
@@ -95,10 +92,9 @@ export async function POST(request: NextRequest) {
       jobsForScoring.push({ title, company, description: description.substring(0, 500), requirements });
     }
 
-    // 5. Batch score all jobs
+    // Batch score
     const scores = await batchScoreJobs(resume, jobsForScoring);
 
-    // 6. Update jobs with scores
     for (const score of scores) {
       const job = savedJobs[score.index];
       if (job) {
@@ -110,29 +106,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Re-fetch updated jobs
     const updatedJobs = savedJobs.map(j => service.getJob(j.id));
     updatedJobs.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
     return successResponse({
       jobs: updatedJobs,
-      searchSessionId: session.id,
       hasMore: searchResults.nextStartIndex !== null,
-      totalResults: searchResults.totalResults,
+      totalResults: session.totalResults,
     });
   } catch (error) {
     return errorResponse(error);
   }
 }
 
-function getYesterday(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
-}
-
 function extractCompanyFromResult(item: { title: string; displayLink: string }): string {
-  // Try to extract company from title (often "Job Title - Company")
   const parts = item.title.split(' - ');
   if (parts.length >= 2) return parts[parts.length - 1].trim();
   const pipe = item.title.split(' | ');

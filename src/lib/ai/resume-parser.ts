@@ -30,10 +30,11 @@ type ParsedResumeResult = z.infer<typeof parsedResumeSchema>;
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   try {
-    // Dynamic import to avoid issues with SSR
-    const pdfParse = (await import('pdf-parse')).default;
-    const data = await pdfParse(buffer);
-    return data.text;
+    const { PDFParse } = await import('pdf-parse');
+    const pdf = new PDFParse({ data: Uint8Array.from(buffer) });
+    const textResult = await pdf.getText();
+    await pdf.destroy();
+    return textResult.text;
   } catch (err) {
     console.error('[resume-parser] PDF parse error:', err);
     return '';

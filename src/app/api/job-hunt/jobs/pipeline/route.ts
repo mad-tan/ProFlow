@@ -5,8 +5,14 @@ import { successResponse, errorResponse } from '@/lib/utils/api-response';
 import { searchGoogleJobs } from '@/lib/services/google-search';
 import { scrapeJobPages } from '@/lib/services/job-scraper';
 import { batchScoreJobs } from '@/lib/ai/batch-scorer';
+import { generateEmailsBatch } from '@/lib/ai/batch-outreach';
+import { generateLinkedInBatch } from '@/lib/ai/batch-outreach';
 import { getNow } from '@/lib/utils/dates';
 
+/**
+ * Full automated pipeline: search -> scrape -> score -> generate emails -> generate linkedin
+ * For jobs scoring >= 60: auto-generates outreach drafts.
+ */
 export async function POST(request: NextRequest) {
   try {
     const service = new JobHuntService();
@@ -18,16 +24,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { query, location, dateAfter } = body;
+    const { query, location, dateAfter, scoreThreshold = 60 } = body;
 
     if (!query) {
       return errorResponse(new Error('Search query is required.'));
     }
 
     // 1. Search Google for real job URLs
+    const yesterday = getYesterday();
     const searchResults = await searchGoogleJobs(query, {
       location,
-      dateAfter: dateAfter ?? getYesterday(),
+      dateAfter: dateAfter ?? yesterday,
     });
 
     if (searchResults.items.length === 0) {
@@ -36,17 +43,19 @@ export async function POST(request: NextRequest) {
         searchSessionId: null,
         hasMore: false,
         totalResults: 0,
+        emailsGenerated: 0,
+        linkedinGenerated: 0,
       });
     }
 
-    // 2. Create search session for pagination
+    // 2. Create search session
     const session = service.createSearchSession({
       userId,
       query,
       location: location ?? '',
-      dateFilter: dateAfter ?? getYesterday(),
+      dateFilter: dateAfter ?? yesterday,
       totalResults: searchResults.totalResults,
-      nextStart: searchResults.nextStartIndex ?? 11,
+      nextStart: searchResults.nextStartIndex ?? 0,
     });
 
     // 3. Scrape only job pages that don't already have descriptions from board APIs
@@ -58,7 +67,7 @@ export async function POST(request: NextRequest) {
       ? await scrapeJobPages(urlsToScrape)
       : new Map<string, null>();
 
-    // 4. Save jobs to DB and collect for scoring
+    // 4. Save jobs to DB
     const jobsForScoring: { title: string; company: string; description: string; requirements: string[] }[] = [];
     const savedJobs: ReturnType<typeof service.createJob>[] = [];
 
@@ -85,7 +94,6 @@ export async function POST(request: NextRequest) {
         tags: [],
       });
 
-      // Update with search session and scrape timestamp
       service.updateJob(savedJob.id, userId, {
         searchSessionId: session.id,
         scrapedAt: data ? getNow() : null,
@@ -98,7 +106,6 @@ export async function POST(request: NextRequest) {
     // 5. Batch score all jobs
     const scores = await batchScoreJobs(resume, jobsForScoring);
 
-    // 6. Update jobs with scores
     for (const score of scores) {
       const job = savedJobs[score.index];
       if (job) {
@@ -114,11 +121,64 @@ export async function POST(request: NextRequest) {
     const updatedJobs = savedJobs.map(j => service.getJob(j.id));
     updatedJobs.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
+    // 6. Auto-generate outreach for high-scoring jobs
+    const highScoreJobs = updatedJobs.filter(j => (j.score ?? 0) >= scoreThreshold);
+    let emailsGenerated = 0;
+    let linkedinGenerated = 0;
+
+    if (highScoreJobs.length > 0) {
+      const jobsForOutreach = highScoreJobs.map(j => ({
+        title: j.title,
+        company: j.company,
+        description: j.description.substring(0, 300),
+      }));
+
+      // Generate emails
+      const emailResults = await generateEmailsBatch(resume, jobsForOutreach);
+      for (const email of emailResults) {
+        const job = highScoreJobs[email.index];
+        if (job) {
+          service.createEmail({
+            userId,
+            listingId: job.id,
+            recipientName: email.recipientName,
+            recipientEmail: email.recipientEmail,
+            company: job.company,
+            subject: email.subject,
+            body: email.body,
+            status: 'drafted',
+          });
+          emailsGenerated++;
+        }
+      }
+
+      // Generate LinkedIn messages
+      const linkedinResults = await generateLinkedInBatch(resume, jobsForOutreach);
+      for (const msg of linkedinResults) {
+        const job = highScoreJobs[msg.index];
+        if (job) {
+          service.createOutreach({
+            userId,
+            listingId: job.id,
+            personName: msg.personName,
+            personTitle: msg.personTitle,
+            personUrl: msg.linkedinSearchUrl || null,
+            company: job.company,
+            message: msg.message,
+            status: 'drafted',
+          });
+          linkedinGenerated++;
+        }
+      }
+    }
+
     return successResponse({
       jobs: updatedJobs,
       searchSessionId: session.id,
       hasMore: searchResults.nextStartIndex !== null,
       totalResults: searchResults.totalResults,
+      emailsGenerated,
+      linkedinGenerated,
     });
   } catch (error) {
     return errorResponse(error);
@@ -132,7 +192,6 @@ function getYesterday(): string {
 }
 
 function extractCompanyFromResult(item: { title: string; displayLink: string }): string {
-  // Try to extract company from title (often "Job Title - Company")
   const parts = item.title.split(' - ');
   if (parts.length >= 2) return parts[parts.length - 1].trim();
   const pipe = item.title.split(' | ');

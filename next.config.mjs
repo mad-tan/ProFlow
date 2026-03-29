@@ -7,7 +7,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['better-sqlite3', 'pdf-parse'],
 };
 
 export default nextConfig;

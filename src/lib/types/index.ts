@@ -298,8 +298,35 @@ export interface JobListing {
   tags: string[];
   metadata: Record<string, unknown>;
   appliedAt: string | null;
+  searchSessionId: string | null;
+  scrapedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SearchSession {
+  id: string;
+  userId: string;
+  query: string;
+  location: string;
+  siteFilter: string;
+  dateFilter: string | null;
+  totalResults: number;
+  nextStart: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SearchJobsResponse {
+  jobs: JobListing[];
+  searchSessionId: string;
+  hasMore: boolean;
+  totalResults: number;
+}
+
+export interface PipelineResponse extends SearchJobsResponse {
+  emailsGenerated: number;
+  linkedinGenerated: number;
 }
 
 export interface Application {

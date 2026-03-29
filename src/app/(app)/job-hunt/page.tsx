@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import {
   Briefcase,
@@ -16,8 +16,14 @@ import {
   XCircle,
   TrendingUp,
   Loader2,
+  Rocket,
+  ChevronDown,
+  ExternalLink,
+  CheckSquare,
+  Square,
 } from "lucide-react";
-import { useResume, useJobListings, useApplications } from "@/lib/hooks/use-job-hunt";
+import { useResume, useJobListings, useApplications, useColdEmails, useLinkedInOutreaches } from "@/lib/hooks/use-job-hunt";
+import type { JobListing, SearchJobsResponse, PipelineResponse } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
@@ -42,15 +48,34 @@ function ScoreBadge({ score }: { score: number | null }) {
   );
 }
 
+function getYesterday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().split("T")[0];
+}
+
+type PipelineStep = "idle" | "searching" | "scraping" | "scoring" | "outreach" | "done";
+
 export default function JobHuntPage() {
   const { resume, isLoading: resumeLoading, uploadResume, deleteResume } = useResume();
-  const { jobs, isLoading: jobsLoading, searchJobs } = useJobListings();
+  const { jobs, isLoading: jobsLoading, searchJobs, loadMore, runPipeline } = useJobListings();
   const { applications } = useApplications();
+  const { generateBatch: generateEmailBatch } = useColdEmails();
+  const { generateBatch: generateLinkedInBatch } = useLinkedInOutreaches();
 
   const [uploading, setUploading] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [pipelineStep, setPipelineStep] = useState<PipelineStep>("idle");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
+  const [dateAfter, setDateAfter] = useState(getYesterday());
+  const [searchSessionId, setSearchSessionId] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
+  const [generatingEmails, setGeneratingEmails] = useState(false);
+  const [generatingLinkedin, setGeneratingLinkedin] = useState(false);
+  const pipelineTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -73,17 +98,121 @@ export default function JobHuntPage() {
       toast.error("Please upload your resume first");
       return;
     }
+    if (!searchQuery.trim()) {
+      toast.error("Enter a search query");
+      return;
+    }
     setSearching(true);
+    setSelectedJobs(new Set());
     try {
-      const results = await searchJobs(searchQuery || undefined, searchLocation || undefined, undefined, 10);
-      toast.success(`Found ${(results ?? []).length} jobs matching your profile!`);
+      const results = await searchJobs(searchQuery, searchLocation || undefined, dateAfter || undefined);
+      setSearchSessionId(results.searchSessionId);
+      setHasMore(results.hasMore);
+      toast.success(`Found ${results.jobs.length} real jobs! Total: ~${results.totalResults}`);
     } catch (err) {
       console.error(err);
       toast.error("Failed to search for jobs");
     } finally {
       setSearching(false);
     }
-  }, [resume, searchQuery, searchLocation, searchJobs]);
+  }, [resume, searchQuery, searchLocation, dateAfter, searchJobs]);
+
+  const handlePipeline = useCallback(async () => {
+    if (!resume) {
+      toast.error("Please upload your resume first");
+      return;
+    }
+    if (!searchQuery.trim()) {
+      toast.error("Enter a search query");
+      return;
+    }
+    setSelectedJobs(new Set());
+    setPipelineStep("searching");
+    // Clear any previous step timers
+    pipelineTimers.current.forEach(clearTimeout);
+    pipelineTimers.current = [];
+    try {
+      const results = await runPipeline(searchQuery, searchLocation || undefined, dateAfter || undefined);
+      // Clear timers again in case they haven't fired yet
+      pipelineTimers.current.forEach(clearTimeout);
+      pipelineTimers.current = [];
+      setPipelineStep("done");
+      setSearchSessionId(results.searchSessionId);
+      setHasMore(results.hasMore);
+      toast.success(
+        `Pipeline complete! ${results.jobs.length} jobs found, ${results.emailsGenerated} emails & ${results.linkedinGenerated} LinkedIn messages drafted.`
+      );
+      const t = setTimeout(() => setPipelineStep("idle"), 3000);
+      pipelineTimers.current.push(t);
+    } catch (err) {
+      console.error(err);
+      pipelineTimers.current.forEach(clearTimeout);
+      pipelineTimers.current = [];
+      toast.error("Pipeline failed — check console for details");
+      setPipelineStep("idle");
+    }
+  }, [resume, searchQuery, searchLocation, dateAfter, runPipeline]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!searchSessionId) return;
+    setLoadingMore(true);
+    try {
+      const results = await loadMore(searchSessionId);
+      setHasMore(results.hasMore);
+      toast.success(`Loaded ${results.jobs.length} more jobs`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load more jobs");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [searchSessionId, loadMore]);
+
+  const toggleJob = (id: string) => {
+    setSelectedJobs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (!jobs) return;
+    if (selectedJobs.size === jobs.length) {
+      setSelectedJobs(new Set());
+    } else {
+      setSelectedJobs(new Set(jobs.map(j => j.id)));
+    }
+  };
+
+  const handleGenerateEmails = useCallback(async () => {
+    if (selectedJobs.size === 0) return;
+    setGeneratingEmails(true);
+    try {
+      const result = await generateEmailBatch(Array.from(selectedJobs));
+      toast.success(`Generated ${result.count} cold emails!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate emails");
+    } finally {
+      setGeneratingEmails(false);
+    }
+  }, [selectedJobs, generateEmailBatch]);
+
+  const handleGenerateLinkedin = useCallback(async () => {
+    if (selectedJobs.size === 0) return;
+    setGeneratingLinkedin(true);
+    try {
+      const result = await generateLinkedInBatch(Array.from(selectedJobs));
+      toast.success(`Generated ${result.count} LinkedIn messages!`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate LinkedIn messages");
+    } finally {
+      setGeneratingLinkedin(false);
+    }
+  }, [selectedJobs, generateLinkedInBatch]);
 
   const handleDeleteResume = useCallback(async () => {
     try {
@@ -100,20 +229,36 @@ export default function JobHuntPage() {
   const appliedCount = jobs?.filter(j => j.status === "applied").length ?? 0;
   const interviewCount = jobs?.filter(j => j.status === "interviewing").length ?? 0;
   const offerCount = jobs?.filter(j => j.status === "offered").length ?? 0;
-  const totalApps = applications?.length ?? 0;
+
+  const pipelineLabels: Record<PipelineStep, string> = {
+    idle: "",
+    searching: "Searching Google for real jobs...",
+    scraping: "Scraping job pages...",
+    scoring: "AI scoring jobs against your resume...",
+    outreach: "Generating emails & LinkedIn drafts...",
+    done: "Pipeline complete!",
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Job Hunt"
-        description="AI-powered job search, application, and outreach"
+        description="Real job search, AI scoring, and automated outreach"
         actions={
-          <Link href="/job-hunt/applications">
-            <Button variant="outline">
-              <Target className="mr-2 h-4 w-4" />
-              Applications Pipeline
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/job-hunt/outreach">
+              <Button variant="outline">
+                <Mail className="mr-2 h-4 w-4" />
+                Outreach Hub
+              </Button>
+            </Link>
+            <Link href="/job-hunt/applications">
+              <Button variant="outline">
+                <Target className="mr-2 h-4 w-4" />
+                Applications
+              </Button>
+            </Link>
+          </div>
         }
       />
 
@@ -234,13 +379,13 @@ export default function JobHuntPage() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Search className="h-4 w-4" />
-            Find Jobs
+            Find Real Jobs
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row">
             <Input
-              placeholder="Job title, skills, or keywords..."
+              placeholder="Job title, e.g. software engineer"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1"
@@ -250,19 +395,70 @@ export default function JobHuntPage() {
               placeholder="Location (optional)"
               value={searchLocation}
               onChange={(e) => setSearchLocation(e.target.value)}
-              className="sm:max-w-[200px]"
+              className="sm:max-w-[180px]"
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             />
-            <Button onClick={handleSearch} disabled={searching || !resume}>
+            <Input
+              type="date"
+              value={dateAfter}
+              onChange={(e) => setDateAfter(e.target.value)}
+              className="sm:max-w-[160px]"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSearch} disabled={searching || pipelineStep !== "idle" || !resume}>
               {searching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-              {searching ? "Searching..." : "Find Jobs For Me"}
+              {searching ? "Searching..." : "Quick Search"}
+            </Button>
+            <Button onClick={handlePipeline} disabled={searching || pipelineStep !== "idle" || !resume} variant="default" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              {pipelineStep !== "idle" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}
+              {pipelineStep !== "idle" ? pipelineLabels[pipelineStep] : "Find & Prepare Everything"}
             </Button>
           </div>
           {!resume && (
-            <p className="text-xs text-muted-foreground mt-2">Upload your resume first to enable AI job matching.</p>
+            <p className="text-xs text-muted-foreground">Upload your resume first to enable job search.</p>
+          )}
+
+          {/* Pipeline Progress */}
+          {pipelineStep !== "idle" && (
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                <span>{pipelineLabels[pipelineStep]}</span>
+              </div>
+              <Progress
+                value={
+                  pipelineStep === "searching" ? 20 :
+                  pipelineStep === "scraping" ? 40 :
+                  pipelineStep === "scoring" ? 65 :
+                  pipelineStep === "outreach" ? 85 :
+                  pipelineStep === "done" ? 100 : 0
+                }
+                className="h-2"
+              />
+            </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Batch Action Bar */}
+      {selectedJobs.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center gap-3 rounded-lg border bg-background/95 backdrop-blur p-3 shadow-lg">
+          <span className="text-sm font-medium">{selectedJobs.size} selected</span>
+          <div className="flex-1" />
+          <Button size="sm" variant="outline" onClick={handleGenerateEmails} disabled={generatingEmails}>
+            {generatingEmails ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Mail className="mr-1.5 h-3.5 w-3.5" />}
+            Generate Emails ({selectedJobs.size})
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleGenerateLinkedin} disabled={generatingLinkedin}>
+            {generatingLinkedin ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Linkedin className="mr-1.5 h-3.5 w-3.5" />}
+            Generate LinkedIn ({selectedJobs.size})
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedJobs(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
 
       {/* Job Results */}
       <Card>
@@ -272,11 +468,19 @@ export default function JobHuntPage() {
               <Briefcase className="h-4 w-4" />
               Your Jobs ({totalJobs})
             </CardTitle>
-            {totalJobs > 0 && (
-              <Link href="/job-hunt/applications">
-                <Button variant="ghost" size="sm">View Pipeline</Button>
-              </Link>
-            )}
+            <div className="flex items-center gap-2">
+              {totalJobs > 0 && (
+                <Button variant="ghost" size="sm" onClick={toggleAll}>
+                  {selectedJobs.size === totalJobs ? <CheckSquare className="mr-1.5 h-3.5 w-3.5" /> : <Square className="mr-1.5 h-3.5 w-3.5" />}
+                  {selectedJobs.size === totalJobs ? "Deselect All" : "Select All"}
+                </Button>
+              )}
+              {totalJobs > 0 && (
+                <Link href="/job-hunt/applications">
+                  <Button variant="ghost" size="sm">View Pipeline</Button>
+                </Link>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -290,14 +494,32 @@ export default function JobHuntPage() {
             <EmptyState
               icon={Briefcase}
               title="No jobs yet"
-              description="Search for jobs or add them manually to start tracking."
+              description='Search for jobs using "Quick Search" or "Find & Prepare Everything" to start.'
             />
           ) : (
-            <div className="space-y-3">
-              {jobs.slice(0, 10).map((job) => (
-                <Link key={job.id} href={`/job-hunt/jobs/${job.id}`}>
-                  <div className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent/50 cursor-pointer">
-                    <div className="flex-1 min-w-0 space-y-1">
+            <div className="space-y-2">
+              {jobs.map((job) => (
+                <div
+                  key={job.id}
+                  className={`flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-accent/50 ${
+                    selectedJobs.has(job.id) ? "border-primary bg-primary/5" : ""
+                  }`}
+                >
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => toggleJob(job.id)}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    {selectedJobs.has(job.id) ? (
+                      <CheckSquare className="h-5 w-5 text-primary" />
+                    ) : (
+                      <Square className="h-5 w-5" />
+                    )}
+                  </button>
+
+                  {/* Job Info */}
+                  <Link href={`/job-hunt/jobs/${job.id}`} className="flex-1 min-w-0">
+                    <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{job.title}</p>
                         <ScoreBadge score={job.score} />
@@ -310,6 +532,9 @@ export default function JobHuntPage() {
                         {(Array.isArray(job.tags) ? job.tags : []).slice(0, 3).map((tag) => (
                           <Badge key={tag} variant="outline" className="text-[10px]">{tag}</Badge>
                         ))}
+                        {job.source && (
+                          <Badge variant="secondary" className="text-[10px]">{job.source}</Badge>
+                        )}
                         <Badge variant={
                           job.status === "applied" ? "default" :
                           job.status === "interviewing" ? "secondary" :
@@ -320,25 +545,37 @@ export default function JobHuntPage() {
                         </Badge>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-4">
-                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                      <Linkedin className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
+                  </Link>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {job.url && (
+                      <a href={job.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </a>
+                    )}
                   </div>
-                </Link>
+                </div>
               ))}
-              {totalJobs > 10 && (
-                <p className="text-xs text-center text-muted-foreground pt-2">
-                  Showing 10 of {totalJobs} jobs. <Link href="/job-hunt/applications" className="text-primary underline">View all</Link>
-                </p>
+
+              {/* Load More */}
+              {hasMore && (
+                <div className="pt-4 text-center">
+                  <Button variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+                    {loadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronDown className="mr-2 h-4 w-4" />}
+                    {loadingMore ? "Loading..." : "Load More Jobs"}
+                  </Button>
+                </div>
               )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Quick Stats */}
-      {totalApps > 0 && (
+      {/* Application Funnel */}
+      {appliedCount > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Application Funnel</CardTitle>
@@ -346,17 +583,17 @@ export default function JobHuntPage() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span>Saved → Applied</span>
+                <span>Saved &rarr; Applied</span>
                 <span className="font-medium">{totalJobs > 0 ? Math.round((appliedCount / totalJobs) * 100) : 0}%</span>
               </div>
               <Progress value={totalJobs > 0 ? (appliedCount / totalJobs) * 100 : 0} className="h-2" />
               <div className="flex items-center justify-between text-sm">
-                <span>Applied → Interview</span>
+                <span>Applied &rarr; Interview</span>
                 <span className="font-medium">{appliedCount > 0 ? Math.round((interviewCount / appliedCount) * 100) : 0}%</span>
               </div>
               <Progress value={appliedCount > 0 ? (interviewCount / appliedCount) * 100 : 0} className="h-2" />
               <div className="flex items-center justify-between text-sm">
-                <span>Interview → Offer</span>
+                <span>Interview &rarr; Offer</span>
                 <span className="font-medium">{interviewCount > 0 ? Math.round((offerCount / interviewCount) * 100) : 0}%</span>
               </div>
               <Progress value={interviewCount > 0 ? (offerCount / interviewCount) * 100 : 0} className="h-2" />
