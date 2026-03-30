@@ -19,8 +19,6 @@ import {
   ChevronsRight,
   Zap,
   StickyNote,
-  Briefcase,
-  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/lib/contexts/sidebar-context";
@@ -34,8 +32,6 @@ import {
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Job Hunt", href: "/job-hunt", icon: Briefcase },
-  { label: "Outreach Hub", href: "/job-hunt/outreach", icon: Mail },
   { label: "Projects", href: "/projects", icon: FolderKanban },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "Time Tracking", href: "/time-tracking", icon: Timer },
