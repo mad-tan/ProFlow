@@ -9,6 +9,13 @@ import {
   BookOpen,
   History,
   Trash2,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -92,6 +99,35 @@ function formatCheckInTime(createdAt: string): string {
   return new Date(createdAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+type TrendDir = "improving" | "declining" | "stable";
+type InsightsData = {
+  summary: string;
+  burnoutRisk: "low" | "moderate" | "high";
+  burnoutRiskReason: string;
+  patterns: { title: string; description: string; sentiment: "positive" | "negative" | "neutral" }[];
+  recommendations: string[];
+  moodTrend: TrendDir;
+  energyTrend: TrendDir;
+  stressTrend: TrendDir;
+  highlights: string[];
+  checkinCount: number;
+  averages: { avgMood: number; avgEnergy: number; avgStress: number; count: number };
+  generatedAt: string;
+  aiPowered: boolean;
+};
+
+function TrendIcon({ trend }: { trend: TrendDir }) {
+  if (trend === "improving") return <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />;
+  if (trend === "declining") return <TrendingDown className="h-3.5 w-3.5 text-red-500" />;
+  return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
+}
+
+function BurnoutBadge({ risk }: { risk: "low" | "moderate" | "high" }) {
+  if (risk === "high") return <Badge className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20">High Risk</Badge>;
+  if (risk === "moderate") return <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20">Moderate Risk</Badge>;
+  return <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">Low Risk</Badge>;
+}
+
 export default function MentalHealthPage() {
   const { checkIns, isLoading: checkInsLoading, createCheckIn } = useCheckIns();
   const {
@@ -116,6 +152,10 @@ export default function MentalHealthPage() {
   const [journalTitle, setJournalTitle] = useState("");
   const [journalContent, setJournalContent] = useState("");
   const [journalSubmitting, setJournalSubmitting] = useState(false);
+
+  // Insights state
+  const [insights, setInsights] = useState<InsightsData | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
   const todayCount = (checkIns ?? []).filter((c) => c.date.slice(0, 10) === today).length;
@@ -165,6 +205,21 @@ export default function MentalHealthPage() {
     }
   }
 
+  async function loadInsights() {
+    setInsightsLoading(true);
+    try {
+      const res = await fetch("/api/mental-health/insights");
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error ?? "Failed to load insights");
+      setInsights(json.data as InsightsData);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load insights");
+    } finally {
+      setInsightsLoading(false);
+    }
+  }
+
   const grouped = groupByDate(checkIns ?? []);
 
   return (
@@ -174,7 +229,7 @@ export default function MentalHealthPage() {
         description="Track your mood, energy, and journal your thoughts"
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={(tab) => { setActiveTab(tab); if (tab === "insights" && !insights) loadInsights(); }}>
         <TabsList>
           <TabsTrigger value="checkin" className="gap-1.5">
             <Heart className="h-4 w-4" />
@@ -192,6 +247,10 @@ export default function MentalHealthPage() {
           <TabsTrigger value="journal" className="gap-1.5">
             <BookOpen className="h-4 w-4" />
             Journal
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="gap-1.5">
+            <Sparkles className="h-4 w-4" />
+            Insights
           </TabsTrigger>
         </TabsList>
 
@@ -541,6 +600,151 @@ export default function MentalHealthPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* Insights Tab */}
+        <TabsContent value="insights" className="mt-6">
+          <div className="flex justify-end mb-4">
+            <Button variant="outline" size="sm" onClick={loadInsights} disabled={insightsLoading}>
+              <RefreshCw className={cn("mr-2 h-3.5 w-3.5", insightsLoading && "animate-spin")} />
+              {insightsLoading ? "Analyzing..." : "Refresh Insights"}
+            </Button>
+          </div>
+
+          {insightsLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-32" />
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Skeleton className="h-20" />
+                <Skeleton className="h-20" />
+                <Skeleton className="h-20" />
+              </div>
+              <Skeleton className="h-48" />
+              <Skeleton className="h-32" />
+            </div>
+          ) : !insights ? (
+            <EmptyState
+              icon={Sparkles}
+              title="Get AI Insights"
+              description="Analyze your mental health patterns with AI-powered insights based on your check-in history."
+              actionLabel="Generate Insights"
+              onAction={loadInsights}
+            />
+          ) : (
+            <div className="space-y-5 max-w-3xl">
+              {/* Summary card */}
+              <Card className={cn(
+                "border",
+                insights.burnoutRisk === "high" ? "border-red-500/30 bg-red-500/5" :
+                insights.burnoutRisk === "moderate" ? "border-amber-500/30 bg-amber-500/5" :
+                "border-emerald-500/30 bg-emerald-500/5"
+              )}>
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-2">
+                      {insights.burnoutRisk === "high" ? (
+                        <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+                      ) : (
+                        <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
+                      )}
+                      <p className="text-sm font-semibold">Burnout Risk</p>
+                    </div>
+                    <BurnoutBadge risk={insights.burnoutRisk} />
+                  </div>
+                  <p className="text-sm text-muted-foreground">{insights.summary}</p>
+                  {insights.aiPowered && (
+                    <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" /> AI-powered analysis
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Trends */}
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { label: "Mood", trend: insights.moodTrend, avg: insights.averages?.avgMood },
+                  { label: "Energy", trend: insights.energyTrend, avg: insights.averages?.avgEnergy },
+                  { label: "Stress", trend: insights.stressTrend, avg: insights.averages?.avgStress },
+                ].map(({ label, trend, avg }) => (
+                  <Card key={label}>
+                    <CardContent className="pt-4 pb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                        <TrendIcon trend={trend} />
+                      </div>
+                      <p className="text-xl font-bold">{avg?.toFixed(1) ?? "—"}<span className="text-xs font-normal text-muted-foreground">/5</span></p>
+                      <p className="text-xs text-muted-foreground capitalize">{trend}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Patterns */}
+              {insights.patterns.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Patterns Detected</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {insights.patterns.map((p, i) => (
+                      <div key={i} className={cn(
+                        "rounded-lg border p-3",
+                        p.sentiment === "positive" ? "border-emerald-500/20 bg-emerald-500/5" :
+                        p.sentiment === "negative" ? "border-red-500/20 bg-red-500/5" :
+                        "border-border bg-muted/30"
+                      )}>
+                        <p className="text-sm font-medium mb-1">{p.title}</p>
+                        <p className="text-sm text-muted-foreground">{p.description}</p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Recommendations */}
+              {insights.recommendations.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Recommendations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {insights.recommendations.map((rec, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm">
+                          <CheckCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                          <span className="text-muted-foreground">{rec}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Highlights / Burnout factors */}
+              {insights.highlights.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Key Highlights</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-1.5">
+                      {insights.highlights.map((h, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                          {h}
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
+              <p className="text-xs text-muted-foreground text-right">
+                Based on {insights.checkinCount} check-ins · Generated {new Date(insights.generatedAt).toLocaleString()}
+              </p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

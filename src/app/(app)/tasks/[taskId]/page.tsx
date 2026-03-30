@@ -15,10 +15,13 @@ import {
   Check,
   MessageSquare,
   Send,
+  Play,
+  Square,
+  Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTask } from "@/lib/hooks/use-tasks";
-import { useTimeEntries } from "@/lib/hooks/use-time-tracking";
+import { useTimeEntries, useActiveTimer } from "@/lib/hooks/use-time-tracking";
 import { useProjects } from "@/lib/hooks/use-projects";
 import { useSubtasks, useTaskComments } from "@/lib/hooks/use-subtasks";
 import type { TaskStatus, TaskPriority } from "@/lib/types";
@@ -40,6 +43,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 const priorityColors: Record<TaskPriority, string> = {
   urgent: "bg-red-500/10 text-red-700 dark:text-red-400",
@@ -56,13 +66,23 @@ function formatDuration(minutes: number | null): string {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+function formatElapsed(startTime: string): string {
+  const elapsed = Math.floor((Date.now() - new Date(startTime).getTime()) / 1000);
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
   const taskId = params.taskId as string;
 
   const { task, isLoading, updateTask, deleteTask } = useTask(taskId);
-  const { timeEntries, isLoading: timeLoading } = useTimeEntries({ taskId });
+  const { timeEntries, isLoading: timeLoading, createManualEntry } = useTimeEntries({ taskId });
+  const { activeTimer, startTimer, stopTimer } = useActiveTimer();
   const { projects } = useProjects();
   const project = task?.projectId ? projects?.find(p => p.id === task.projectId) : null;
   const { subtasks, addSubtask, toggleSubtask, deleteSubtask } = useSubtasks(taskId);
@@ -75,6 +95,83 @@ export default function TaskDetailPage() {
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [addingComment, setAddingComment] = useState(false);
+
+  // Timer state
+  const [timerLoading, setTimerLoading] = useState(false);
+  const isTimerActiveForThisTask = activeTimer?.taskId === taskId;
+
+  // Log time dialog state
+  const [logTimeOpen, setLogTimeOpen] = useState(false);
+  const [logDesc, setLogDesc] = useState("");
+  const [logStart, setLogStart] = useState("");
+  const [logEnd, setLogEnd] = useState("");
+  const [logSubmitting, setLogSubmitting] = useState(false);
+
+  async function handleStartTimer() {
+    setTimerLoading(true);
+    try {
+      if (activeTimer && !isTimerActiveForThisTask) {
+        // Stop current timer first, then start for this task
+        await stopTimer();
+      }
+      await startTimer(taskId, task?.title);
+      toast.success("Timer started");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to start timer");
+    } finally {
+      setTimerLoading(false);
+    }
+  }
+
+  async function handleStopTimer() {
+    setTimerLoading(true);
+    try {
+      await stopTimer();
+      toast.success("Timer stopped");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to stop timer");
+    } finally {
+      setTimerLoading(false);
+    }
+  }
+
+  function openLogTime() {
+    const now = new Date();
+    const endISO = now.toISOString().slice(0, 16); // datetime-local format
+    const startISO = new Date(now.getTime() - 30 * 60 * 1000).toISOString().slice(0, 16);
+    setLogStart(startISO);
+    setLogEnd(endISO);
+    setLogDesc("");
+    setLogTimeOpen(true);
+  }
+
+  async function handleLogTime() {
+    if (!logStart || !logEnd) return;
+    const startMs = new Date(logStart).getTime();
+    const endMs = new Date(logEnd).getTime();
+    if (endMs <= startMs) {
+      toast.error("End time must be after start time");
+      return;
+    }
+    setLogSubmitting(true);
+    try {
+      await createManualEntry({
+        taskId,
+        description: logDesc.trim() || undefined,
+        startTime: new Date(logStart).toISOString(),
+        endTime: new Date(logEnd).toISOString(),
+      });
+      setLogTimeOpen(false);
+      toast.success("Time entry logged");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to log time");
+    } finally {
+      setLogSubmitting(false);
+    }
+  }
 
   async function handleAddSubtask() {
     if (!newSubtask.trim()) return;
@@ -177,6 +274,8 @@ export default function TaskDetailPage() {
       />
     );
   }
+
+  const totalMinutes = (timeEntries ?? []).reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -408,12 +507,61 @@ export default function TaskDetailPage() {
           {/* Time Entries */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
-                Time Entries
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Time Entries
+                  {totalMinutes > 0 && (
+                    <span className="text-xs text-muted-foreground font-normal">
+                      {formatDuration(totalMinutes)} total
+                    </span>
+                  )}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openLogTime}
+                    className="h-7 px-2 text-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Log Time
+                  </Button>
+                  {isTimerActiveForThisTask ? (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleStopTimer}
+                      disabled={timerLoading}
+                      className="h-7 px-2 text-xs"
+                    >
+                      <Square className="h-3 w-3 mr-1 fill-current" />
+                      Stop {formatElapsed(activeTimer!.startTime)}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={handleStartTimer}
+                      disabled={timerLoading}
+                      className="h-7 px-2 text-xs"
+                    >
+                      <Play className="h-3.5 w-3.5 mr-1 fill-current" />
+                      {activeTimer ? "Switch Timer" : "Start Timer"}
+                    </Button>
+                  )}
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
+              {/* Active timer banner */}
+              {isTimerActiveForThisTask && activeTimer && (
+                <div className="mb-3 flex items-center gap-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                    Timer running — {formatElapsed(activeTimer.startTime)}
+                  </span>
+                </div>
+              )}
               {timeLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -437,6 +585,9 @@ export default function TaskDetailPage() {
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(entry.startTime).toLocaleString()}
+                          {entry.endTime && (
+                            <> — {new Date(entry.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</>
+                          )}
                         </p>
                       </div>
                       <Badge variant="secondary">
@@ -605,8 +756,90 @@ export default function TaskDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Quick Timer Card */}
+          <Card className={cn(isTimerActiveForThisTask && "border-emerald-500/40 bg-emerald-500/5")}>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <Timer className={cn("h-4 w-4", isTimerActiveForThisTask ? "text-emerald-500" : "text-muted-foreground")} />
+                <div className="flex-1">
+                  <p className="text-xs font-medium">
+                    {isTimerActiveForThisTask ? "Timer Running" : "Time Tracking"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isTimerActiveForThisTask
+                      ? formatElapsed(activeTimer!.startTime)
+                      : totalMinutes > 0
+                        ? `${formatDuration(totalMinutes)} logged`
+                        : "No time logged yet"}
+                  </p>
+                </div>
+                {isTimerActiveForThisTask ? (
+                  <Button size="sm" variant="destructive" onClick={handleStopTimer} disabled={timerLoading} className="h-7 px-2 text-xs">
+                    <Square className="h-3 w-3 fill-current" />
+                  </Button>
+                ) : (
+                  <Button size="sm" onClick={handleStartTimer} disabled={timerLoading} className="h-7 px-2 text-xs">
+                    <Play className="h-3.5 w-3.5 fill-current" />
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* Log Time Dialog */}
+      <Dialog open={logTimeOpen} onOpenChange={setLogTimeOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Log Time Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Input
+                placeholder="What did you work on?"
+                value={logDesc}
+                onChange={(e) => setLogDesc(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Start Time</Label>
+                <input
+                  type="datetime-local"
+                  value={logStart}
+                  onChange={(e) => setLogStart(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>End Time</Label>
+                <input
+                  type="datetime-local"
+                  value={logEnd}
+                  onChange={(e) => setLogEnd(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+            {logStart && logEnd && new Date(logEnd) > new Date(logStart) && (
+              <p className="text-xs text-muted-foreground">
+                Duration: {formatDuration(Math.round((new Date(logEnd).getTime() - new Date(logStart).getTime()) / 60000))}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogTimeOpen(false)} disabled={logSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleLogTime} disabled={!logStart || !logEnd || logSubmitting}>
+              {logSubmitting ? "Saving..." : "Log Time"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

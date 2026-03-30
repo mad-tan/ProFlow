@@ -5,6 +5,7 @@ import { migration003Notes } from "./003_notes";
 import { migration004SubtasksComments } from "./004_subtasks_comments";
 import { migration005JobHunt } from "./005_job_hunt";
 import { migration006JobHuntSearch } from "./006_job_hunt_search";
+import { migration007MentalHealthMultiCheckIn } from "./007_mental_health_multi_checkin";
 
 export interface Migration {
   id: string;
@@ -15,7 +16,7 @@ export interface Migration {
 /**
  * All migrations in order. Append new migrations to the end of this array.
  */
-const migrations: Migration[] = [migration001Initial, migration002Auth, migration003Notes, migration004SubtasksComments, migration005JobHunt, migration006JobHuntSearch];
+const migrations: Migration[] = [migration001Initial, migration002Auth, migration003Notes, migration004SubtasksComments, migration005JobHunt, migration006JobHuntSearch, migration007MentalHealthMultiCheckIn];
 
 /**
  * Ensure the _migrations tracking table exists.
