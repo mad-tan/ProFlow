@@ -1870,7 +1870,14 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, pendingIntent, fileContent, fileName } = body;
+    const { message, pendingIntent, files: rawFiles, fileContent, fileName } = body;
+
+    // Support both new multi-file format and legacy single-file format
+    const files: { name: string; content: string }[] = Array.isArray(rawFiles)
+      ? rawFiles.filter((f: unknown) => f && typeof (f as { content?: unknown }).content === 'string')
+      : fileContent && typeof fileContent === 'string'
+        ? [{ name: fileName || 'file', content: fileContent }]
+        : [];
 
     if (!message || typeof message !== 'string') {
       return errorResponse(new Error('"message" string is required'));
@@ -1882,8 +1889,8 @@ export async function POST(request: NextRequest) {
     if (pendingIntent) {
       // Continue an existing guided conversation flow — no LLM needed
       response = await handlePendingIntent(message, pendingIntent, userId);
-    } else if (fileContent && typeof fileContent === 'string') {
-      // File was attached — generate tasks from it
+    } else if (files.length > 0) {
+      // Files were attached — generate tasks from them
       if (!isLLMEnabled()) {
         response = {
           role: 'assistant',
@@ -1891,11 +1898,16 @@ export async function POST(request: NextRequest) {
           pendingIntent: null,
         };
       } else {
-        const result = await generateTasksFromContent(fileContent, message, userId);
+        // Merge all file contents with file name headers
+        const combinedContent = files
+          .map((f) => `--- ${f.name} ---\n${f.content}`)
+          .join('\n\n');
+        const fileLabel = files.length === 1 ? `**${files[0].name}**` : `**${files.length} files**`;
+        const result = await generateTasksFromContent(combinedContent, message, userId);
         if (!result || result.tasks.length === 0) {
           response = {
             role: 'assistant',
-            content: `I couldn't extract any tasks from **${fileName || 'the file'}**. Try attaching a different file or providing more context in your message.`,
+            content: `I couldn't extract any tasks from ${fileLabel}. Try attaching different files or providing more context in your message.`,
             pendingIntent: null,
           };
         } else {
