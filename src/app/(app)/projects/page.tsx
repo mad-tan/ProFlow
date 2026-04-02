@@ -10,6 +10,7 @@ import {
   Archive,
   Trash2,
   ArrowUpDown,
+  Download,
 } from "lucide-react";
 import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
@@ -257,6 +258,29 @@ export default function ProjectsPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={async () => {
+                          try {
+                            const res = await fetch(`/api/export/project/${project.id}`);
+                            if (!res.ok) throw new Error("Export failed");
+                            const blob = await res.blob();
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            const slug = project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+                            a.download = `proflow-project-${slug}-${new Date().toISOString().split("T")[0]}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            toast.success("Project exported");
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Failed to export project");
+                          }
+                        }}
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Export
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={async () => {
                           try {
