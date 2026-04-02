@@ -9,6 +9,7 @@ import { ProjectService } from '@/lib/services/project.service';
 import { AnalyticsService } from '@/lib/services/analytics.service';
 import { MentalHealthService } from '@/lib/services/mental-health.service';
 import { NoteService } from '@/lib/services/note.service';
+import { SubtaskRepository } from '@/lib/repositories/subtask.repository';
 import type { TaskPriority } from '@/lib/types';
 import { callLLM, callLLMStructured, isLLMEnabled } from '@/lib/ai/provider';
 import { z } from 'zod';
@@ -255,6 +256,7 @@ type IntentType =
   | 'log_mood' | 'write_journal'
   | 'create_note' | 'list_notes' | 'delete_note'
   | 'show_summary'
+  | 'generate_tasks'
   | 'help' | 'unknown';
 
 function detectIntent(msg: string): IntentType {
@@ -295,6 +297,11 @@ function detectIntent(msg: string): IntentType {
   // Analytics
   if (/\b(summary|stats|analytics|overview|how am i doing|productivity|progress)\b/i.test(msg)) return 'show_summary';
 
+  // Generate tasks from uploaded content
+  if (/\b(generate|extract|create|make|build)\b.*(tasks?|subtasks?|breakdown|plan).*(from|using|with|based on)\b/i.test(msg)) return 'generate_tasks';
+  if (/\b(from|using)\b.*(attached|upload|file|document|transcript|code)\b.*(tasks?|subtasks?|breakdown)\b/i.test(msg)) return 'generate_tasks';
+  if (/\bgenerate\s+tasks?\b/i.test(msg)) return 'generate_tasks';
+
   if (/\b(help|what can you do|commands|capabilities|features)\b/i.test(msg)) return 'help';
 
   return 'unknown';
@@ -310,7 +317,7 @@ const INTENT_VALUES = [
   'create_checklist','add_checklist_item',
   'log_mood','write_journal',
   'create_note','list_notes','delete_note',
-  'show_summary','help','unknown',
+  'show_summary','generate_tasks','help','unknown',
 ] as const;
 
 const intentSchema = z.object({
@@ -421,8 +428,10 @@ INTENTS:
 - create_checklist, add_checklist_item
 - log_mood, write_journal
 - create_note, list_notes, delete_note
-- show_summary, help
+- show_summary, generate_tasks, help
 - unknown (conversational/unclear)
+
+NOTE: Use generate_tasks when the user wants to create multiple tasks from uploaded content, transcripts, documents, or any bulk text input.
 
 ENTITY EXTRACTION RULES:
 - title: name/title of task, project, reminder, checklist, or journal entry
@@ -507,6 +516,124 @@ function createTaskFromCollected(c: Record<string, unknown>, userId: string): Ch
   } catch (err) {
     return { role: 'assistant', content: `Sorry, couldn't create the task: ${err instanceof Error ? err.message : 'unknown error'}`, pendingIntent: null };
   }
+}
+
+// ─── Generate Tasks from Content ────────────────────────────────────────────
+
+const generatedTaskSchema = z.object({
+  title: z.string(),
+  description: z.string().nullable(),
+  priority: z.enum(['urgent', 'high', 'medium', 'low', 'none']),
+  dueDate: z.string().nullable().optional(),
+  subtasks: z.array(z.string()),
+});
+
+const generatedTasksResponseSchema = z.object({
+  tasks: z.array(generatedTaskSchema),
+});
+
+type GeneratedTask = z.infer<typeof generatedTaskSchema>;
+
+async function generateTasksFromContent(
+  content: string,
+  userMessage: string,
+  userId: string
+): Promise<{ tasks: GeneratedTask[] } | null> {
+  if (!isLLMEnabled()) return null;
+
+  // Get existing projects for context
+  const projects = new ProjectService().listByUser(userId) as Array<{ id: string; name: string }>;
+  const projectContext = projects.length > 0
+    ? `\nUser's existing projects: ${projects.map(p => p.name).join(', ')}`
+    : '';
+
+  const today = localDateStr(new Date());
+
+  const system = `You are a smart task planner for ProFlow, a productivity app. Analyze the provided content (transcripts, documents, code, notes, etc.) and generate a structured list of tasks and subtasks.
+
+## Task Structure
+Each task should have:
+- title: Short, actionable task name (max 80 chars)
+- description: Detailed description of what needs to be done (1-3 sentences)
+- priority: urgent | high | medium | low | none — judge based on importance/urgency from context
+- dueDate: YYYY-MM-DD format if a deadline is mentioned or can be inferred, otherwise null
+- subtasks: Array of subtask titles (short, actionable items that break down the task)
+
+## Rules
+- Create practical, actionable tasks — not vague goals
+- Each task should be independently completable
+- Subtasks should be concrete steps to accomplish the parent task
+- Infer priority from context (blockers/critical items = urgent/high, nice-to-haves = low)
+- If dates are mentioned, convert to YYYY-MM-DD (today is ${today})
+- Keep task count reasonable (3-15 tasks typically)
+- Group related work into single tasks with subtasks rather than many tiny tasks
+${projectContext}
+
+## User Context
+The user may provide additional instructions about how to organize the tasks. Follow their guidance.
+
+Respond with valid JSON only.`;
+
+  const userPrompt = userMessage
+    ? `User instructions: ${userMessage}\n\n---\n\nContent to analyze:\n${content.slice(0, 12000)}`
+    : `Content to analyze:\n${content.slice(0, 12000)}`;
+
+  return await callLLMStructured(system, userPrompt, generatedTasksResponseSchema);
+}
+
+function formatTaskPreview(tasks: GeneratedTask[]): string {
+  const lines: string[] = ['Here are the tasks I generated:\n'];
+  tasks.forEach((t, i) => {
+    const priority = t.priority !== 'none' ? ` [${t.priority}]` : '';
+    const due = t.dueDate ? ` — due ${formatDate(t.dueDate)}` : '';
+    lines.push(`**${i + 1}. ${t.title}**${priority}${due}`);
+    if (t.description) lines.push(`   ${t.description}`);
+    if (t.subtasks.length > 0) {
+      t.subtasks.forEach(s => lines.push(`   • ${s}`));
+    }
+    lines.push('');
+  });
+  lines.push(`**Total: ${tasks.length} tasks** with ${tasks.reduce((n, t) => n + t.subtasks.length, 0)} subtasks.\n`);
+  lines.push('Should I create all these tasks? (say **yes** to confirm or **no** to cancel)');
+  return lines.join('\n');
+}
+
+function bulkCreateTasks(tasks: GeneratedTask[], userId: string, projectId?: string): { created: number; subtasksCreated: number } {
+  const taskService = new TaskService();
+  const subtaskRepo = new SubtaskRepository();
+  let created = 0;
+  let subtasksCreated = 0;
+
+  for (const t of tasks) {
+    try {
+      const task = taskService.create({
+        userId,
+        title: t.title,
+        description: t.description ?? undefined,
+        priority: (t.priority ?? 'medium') as TaskPriority,
+        dueDate: t.dueDate ?? null,
+        projectId: projectId ?? null,
+        status: 'todo',
+        tags: [],
+      });
+      created++;
+
+      for (let si = 0; si < t.subtasks.length; si++) {
+        try {
+          subtaskRepo.create({
+            taskId: task.id,
+            userId,
+            title: t.subtasks[si],
+            isCompleted: false,
+            sortOrder: si,
+          });
+          subtasksCreated++;
+        } catch { /* skip failed subtask */ }
+      }
+    } catch { /* skip failed task */ }
+  }
+
+  return { created, subtasksCreated };
 }
 
 // ─── Intent Handlers ─────────────────────────────────────────────────────────
@@ -1032,6 +1159,61 @@ async function handlePendingIntent(
         } else {
           return { role: 'assistant', content: "Okay, the note was not deleted.", pendingIntent: null };
         }
+      }
+      break;
+    }
+
+    // ── Generate Tasks (approval flow) ──────────────────────────
+    case 'generate_tasks': {
+      const c = pending.collected;
+
+      if (pending.step === 'awaiting_approval') {
+        if (isConfirm(msg)) {
+          // Check if user wants to assign to a project
+          const projects = new ProjectService().listByUser(userId);
+          if (projects.length > 0) {
+            const projectList = projects.map((p: { id: string; name: string }, i: number) => `**${i + 1}.** ${p.name}`).join(', ');
+            return {
+              role: 'assistant',
+              content: `Which project should these tasks go into? ${projectList} — or say **no project**`,
+              pendingIntent: { type: 'generate_tasks', step: 'awaiting_project', collected: { ...c, _projects: projects } },
+            };
+          }
+          // No projects — create immediately
+          const tasks = c.generatedTasks as GeneratedTask[];
+          const result = bulkCreateTasks(tasks, userId);
+          return {
+            role: 'assistant',
+            content: `Done! Created **${result.created} tasks** with **${result.subtasksCreated} subtasks**. You can find them on the Tasks page.`,
+            action: { type: 'bulk_create_tasks', success: true, data: result },
+            pendingIntent: null,
+          };
+        }
+        if (isCancel(msg)) {
+          return { role: 'assistant', content: "No problem, tasks were not created. Let me know if you'd like to try again with different instructions.", pendingIntent: null };
+        }
+        return { role: 'assistant', content: "Please say **yes** to create these tasks or **no** to cancel.", pendingIntent: pending };
+      }
+
+      if (pending.step === 'awaiting_project') {
+        const projects = (c._projects as { id: string; name: string }[]) ?? [];
+        let projectId: string | undefined;
+        if (!isSkip(msg)) {
+          const idx = parseInt(msg.trim()) - 1;
+          const byIndex = !isNaN(idx) && projects[idx];
+          const byName = projects.find(p => lower(p.name).includes(lower(msg.trim())));
+          const match = byIndex || byName;
+          if (match && typeof match !== 'boolean') projectId = match.id;
+        }
+        const tasks = c.generatedTasks as GeneratedTask[];
+        const result = bulkCreateTasks(tasks, userId, projectId);
+        const projectNote = projectId ? ' in the selected project' : '';
+        return {
+          role: 'assistant',
+          content: `Done! Created **${result.created} tasks** with **${result.subtasksCreated} subtasks**${projectNote}. You can find them on the Tasks page.`,
+          action: { type: 'bulk_create_tasks', success: true, data: result },
+          pendingIntent: null,
+        };
       }
       break;
     }
@@ -1628,6 +1810,15 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
       }
     }
 
+    // ── Generate Tasks from File ────────────────────────────────
+    case 'generate_tasks': {
+      return {
+        role: 'assistant',
+        content: "To generate tasks, please attach a file using the 📎 button (transcript, document, code, notes, etc.) and I'll analyze it to create tasks and subtasks for you.",
+        pendingIntent: null,
+      };
+    }
+
     // ── Help ─────────────────────────────────────────────────────
     case 'help':
     default: {
@@ -1641,6 +1832,9 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
           "- *Mark task Review PR as done*\n" +
           "- *Delete task Review PR*\n" +
           "- *Show my tasks*\n\n" +
+          "**Generate Tasks from Files**\n" +
+          "- Attach a file (transcript, code, document) using 📎 and say *generate tasks*\n" +
+          "- I'll analyze the content and create tasks with subtasks for your approval\n\n" +
           "**Projects**\n" +
           "- *Create a project called Website Redesign*\n" +
           "- *Delete project Website Redesign*\n" +
@@ -1676,7 +1870,7 @@ async function handleFreshIntent(msg: string, intent: IntentType, userId: string
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, pendingIntent } = body;
+    const { message, pendingIntent, fileContent, fileName } = body;
 
     if (!message || typeof message !== 'string') {
       return errorResponse(new Error('"message" string is required'));
@@ -1688,6 +1882,35 @@ export async function POST(request: NextRequest) {
     if (pendingIntent) {
       // Continue an existing guided conversation flow — no LLM needed
       response = await handlePendingIntent(message, pendingIntent, userId);
+    } else if (fileContent && typeof fileContent === 'string') {
+      // File was attached — generate tasks from it
+      if (!isLLMEnabled()) {
+        response = {
+          role: 'assistant',
+          content: "AI is not configured. Please set up an AI provider (Gemini or Groq) in your environment to use task generation from files.",
+          pendingIntent: null,
+        };
+      } else {
+        const result = await generateTasksFromContent(fileContent, message, userId);
+        if (!result || result.tasks.length === 0) {
+          response = {
+            role: 'assistant',
+            content: `I couldn't extract any tasks from **${fileName || 'the file'}**. Try attaching a different file or providing more context in your message.`,
+            pendingIntent: null,
+          };
+        } else {
+          const preview = formatTaskPreview(result.tasks);
+          response = {
+            role: 'assistant',
+            content: preview,
+            pendingIntent: {
+              type: 'generate_tasks',
+              step: 'awaiting_approval',
+              collected: { generatedTasks: result.tasks },
+            },
+          };
+        }
+      }
     } else {
       // Fresh message — try LLM parse (intent + entities) first, fall back to regex
       let intent: IntentType;

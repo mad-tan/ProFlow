@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { toast } from "sonner";
-import { Plus, ListTodo, LayoutGrid, Check, ArrowUpDown } from "lucide-react";
+import { Plus, ListTodo, LayoutGrid, Check, ArrowUpDown, ChevronDown, FolderOpen } from "lucide-react";
 import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
 import { useTasks } from "@/lib/hooks/use-tasks";
@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const BOARD_COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
   { status: "todo", label: "To Do", color: "border-t-blue-500" },
@@ -72,6 +73,7 @@ export default function TasksPage() {
   const [priorityFilter, setPriorityFilter] = usePersistedState<TaskPriority | "all">(
     "proflow-tasks-priority-filter", "all"
   );
+  const [projectIds, setProjectIds] = usePersistedState<string[]>("proflow-tasks-project-filter", []);
   const [searchQuery, setSearchQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -98,7 +100,11 @@ export default function TasksPage() {
   const priorityOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
 
   const allTasks = useMemo(() => {
-    const list = [...(tasks ?? [])];
+    let list = [...(tasks ?? [])];
+    if (projectIds.length > 0) {
+      const idSet = new Set(projectIds);
+      list = list.filter((t) => t.projectId != null && idSet.has(t.projectId));
+    }
     switch (sortBy) {
       case "due_date":
         return list.sort((a, b) => {
@@ -114,7 +120,7 @@ export default function TasksPage() {
       default:
         return list;
     }
-  }, [tasks, sortBy]);
+  }, [tasks, sortBy, projectIds]);
 
   async function handleCreate() {
     if (!formTitle.trim()) return;
@@ -230,6 +236,67 @@ export default function TasksPage() {
             <SelectItem value="none">None</SelectItem>
           </SelectContent>
         </Select>
+        {projects && projects.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className={cn(
+                  "flex h-10 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors",
+                  "bg-background hover:bg-accent hover:text-accent-foreground",
+                  projectIds.length > 0
+                    ? "border-indigo-400 text-indigo-600 dark:text-indigo-400"
+                    : "border-input text-muted-foreground"
+                )}
+              >
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                {projectIds.length === 0
+                  ? "All Projects"
+                  : projectIds.length === 1
+                  ? projects.find((p) => p.id === projectIds[0])?.name ?? "1 Project"
+                  : `${projectIds.length} Projects`}
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-56 p-1">
+              <button
+                onClick={() => setProjectIds([])}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent",
+                  projectIds.length === 0 && "font-medium text-indigo-600 dark:text-indigo-400"
+                )}
+              >
+                <Check className={cn("h-3.5 w-3.5 shrink-0", projectIds.length === 0 ? "opacity-100" : "opacity-0")} />
+                All Projects
+              </button>
+              <div className="my-1 h-px bg-border" />
+              {projects.map((project) => {
+                const selected = projectIds.includes(project.id);
+                return (
+                  <button
+                    key={project.id}
+                    onClick={() =>
+                      setProjectIds(
+                        selected
+                          ? projectIds.filter((id) => id !== project.id)
+                          : [...projectIds, project.id]
+                      )
+                    }
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+                  >
+                    <Check className={cn("h-3.5 w-3.5 shrink-0 text-indigo-500", selected ? "opacity-100" : "opacity-0")} />
+                    {project.color && (
+                      <span
+                        className="h-2 w-2 rounded-full shrink-0"
+                        style={{ backgroundColor: project.color }}
+                      />
+                    )}
+                    <span className="truncate">{project.name}</span>
+                  </button>
+                );
+              })}
+            </PopoverContent>
+          </Popover>
+        )}
         <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
           <SelectTrigger className="w-[150px]">
             <div className="flex items-center gap-1.5">

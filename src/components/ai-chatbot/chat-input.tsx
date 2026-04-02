@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { SendHorizontal, Loader2 } from "lucide-react";
+import { SendHorizontal, Loader2, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useChatbot } from "@/lib/contexts/chatbot-context";
 import { useTimer } from "@/lib/contexts/timer-context";
@@ -30,12 +30,15 @@ const CACHE_INVALIDATION_MAP: Record<string, string[]> = {
   log_mood: ["/api/mental-health/check-ins", "/api/analytics/summary"],
   write_journal: ["/api/mental-health/journal"],
   show_summary: ["/api/analytics/summary"],
+  bulk_create_tasks: ["/api/tasks", "/api/analytics/summary"],
 };
 
 export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; content: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { addMessage, pendingIntent, setPendingIntent, isOpen } = useChatbot();
   const { startTimer: startTimerUI, stopTimer: stopTimerUI } = useTimer();
   const { mutate } = useSWRConfig();
@@ -62,12 +65,37 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
     });
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Accept text-based files up to 5MB
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      addMessage({ role: "assistant", content: "File is too large. Please upload files under 5MB." });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachedFile({ name: file.name, content: reader.result as string });
+    };
+    reader.readAsText(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  };
+
   const handleSend = async () => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+    if ((!trimmed && !attachedFile) || isLoading) return;
+
+    const displayMsg = attachedFile
+      ? `${trimmed || "Generate tasks from this"}\n📎 ${attachedFile.name}`
+      : trimmed;
 
     setInput("");
-    addMessage({ role: "user", content: trimmed });
+    const fileContent = attachedFile?.content ?? undefined;
+    const fileName = attachedFile?.name ?? undefined;
+    setAttachedFile(null);
+    addMessage({ role: "user", content: displayMsg });
     setIsLoading(true);
 
     try {
@@ -75,8 +103,10 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: trimmed,
+          message: trimmed || "Generate tasks from the attached file",
           pendingIntent: pendingIntent ?? undefined,
+          fileContent,
+          fileName,
         }),
       });
 
@@ -159,7 +189,42 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
         </div>
       )}
 
+      {/* Attached file indicator */}
+      {attachedFile && (
+        <div className="flex items-center justify-between px-4 py-1.5 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-100 dark:border-emerald-800/30">
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 truncate">
+            <Paperclip className="inline h-3 w-3 mr-1" />
+            {attachedFile.name}
+          </span>
+          <button
+            onClick={() => setAttachedFile(null)}
+            className="text-xs text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300 ml-2"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 px-4 py-3">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.md,.csv,.json,.sql,.log,.xml,.html,.js,.ts,.py,.doc,.docx,.pdf"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+        {/* Attach file button */}
+        <Button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading}
+          size="icon"
+          variant="ghost"
+          className="h-10 w-10 shrink-0 rounded-xl text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all duration-200 disabled:opacity-40"
+          title="Attach a file"
+        >
+          <Paperclip className="h-4 w-4" />
+        </Button>
         <input
           ref={inputRef}
           type="text"
@@ -179,7 +244,7 @@ export function ChatInput({ externalValue, onExternalValueUsed }: ChatInputProps
         />
         <Button
           onClick={handleSend}
-          disabled={!input.trim() || isLoading}
+          disabled={(!input.trim() && !attachedFile) || isLoading}
           size="icon"
           className={cn(
             "h-10 w-10 shrink-0 rounded-xl transition-all duration-200",
