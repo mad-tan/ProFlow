@@ -195,122 +195,126 @@ export default function TasksPage() {
       />
 
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col gap-2">
+        <div className="relative w-full">
           <Input
             placeholder="Search tasks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => setStatusFilter(v as TaskStatus | "all")}
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="backlog">Backlog</SelectItem>
-            <SelectItem value="todo">To Do</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="in_review">In Review</SelectItem>
-            <SelectItem value="done">Done</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select
-          value={priorityFilter}
-          onValueChange={(v) => setPriorityFilter(v as TaskPriority | "all")}
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Priority" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="urgent">Urgent</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="none">None</SelectItem>
-          </SelectContent>
-        </Select>
-        {projects && projects.length > 0 && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button
-                className={cn(
-                  "flex h-10 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors",
-                  "bg-background hover:bg-accent hover:text-accent-foreground",
-                  projectIds.length > 0
-                    ? "border-indigo-400 text-indigo-600 dark:text-indigo-400"
-                    : "border-input text-muted-foreground"
-                )}
-              >
-                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                {projectIds.length === 0
-                  ? "All Projects"
-                  : projectIds.length === 1
-                  ? projects.find((p) => p.id === projectIds[0])?.name ?? "1 Project"
-                  : `${projectIds.length} Projects`}
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-56 p-1">
-              <button
-                onClick={() => setProjectIds([])}
-                className={cn(
-                  "flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent",
-                  projectIds.length === 0 && "font-medium text-indigo-600 dark:text-indigo-400"
-                )}
-              >
-                <Check className={cn("h-3.5 w-3.5 shrink-0", projectIds.length === 0 ? "opacity-100" : "opacity-0")} />
-                All Projects
-              </button>
-              <div className="my-1 h-px bg-border" />
-              {projects.map((project) => {
-                const selected = projectIds.includes(project.id);
-                return (
-                  <button
-                    key={project.id}
-                    onClick={() =>
-                      setProjectIds(
-                        selected
-                          ? projectIds.filter((id) => id !== project.id)
-                          : [...projectIds, project.id]
-                      )
-                    }
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent"
-                  >
-                    <Check className={cn("h-3.5 w-3.5 shrink-0 text-indigo-500", selected ? "opacity-100" : "opacity-0")} />
-                    {project.color && (
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0"
-                        style={{ backgroundColor: project.color }}
-                      />
-                    )}
-                    <span className="truncate">{project.name}</span>
-                  </button>
-                );
-              })}
-            </PopoverContent>
-          </Popover>
-        )}
-        <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
-          <SelectTrigger className="w-[150px]">
-            <div className="flex items-center gap-1.5">
-              <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
-              <SelectValue placeholder="Sort" />
-            </div>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="created">Date Created</SelectItem>
-            <SelectItem value="due_date">Due Date</SelectItem>
-            <SelectItem value="priority">Priority</SelectItem>
-            <SelectItem value="title">Title</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as TaskStatus | "all")}
+          >
+            <SelectTrigger className="w-full sm:w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="backlog">Backlog</SelectItem>
+              <SelectItem value="todo">To Do</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="in_review">In Review</SelectItem>
+              <SelectItem value="done">Done</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={priorityFilter}
+            onValueChange={(v) => setPriorityFilter(v as TaskPriority | "all")}
+          >
+            <SelectTrigger className="w-full sm:w-[150px]">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value="urgent">Urgent</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="none">None</SelectItem>
+            </SelectContent>
+          </Select>
+          {projects && projects.length > 0 && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  className={cn(
+                    "flex h-10 w-full sm:w-auto items-center gap-1.5 rounded-md border px-3 text-sm transition-colors",
+                    "bg-background hover:bg-accent hover:text-accent-foreground",
+                    projectIds.length > 0
+                      ? "border-indigo-400 text-indigo-600 dark:text-indigo-400"
+                      : "border-input text-muted-foreground"
+                  )}
+                >
+                  <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span className="flex-1 text-left">
+                    {projectIds.length === 0
+                      ? "All Projects"
+                      : projectIds.length === 1
+                      ? projects.find((p) => p.id === projectIds[0])?.name ?? "1 Project"
+                      : `${projectIds.length} Projects`}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-56 p-1">
+                <button
+                  onClick={() => setProjectIds([])}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent",
+                    projectIds.length === 0 && "font-medium text-indigo-600 dark:text-indigo-400"
+                  )}
+                >
+                  <Check className={cn("h-3.5 w-3.5 shrink-0", projectIds.length === 0 ? "opacity-100" : "opacity-0")} />
+                  All Projects
+                </button>
+                <div className="my-1 h-px bg-border" />
+                {projects.map((project) => {
+                  const selected = projectIds.includes(project.id);
+                  return (
+                    <button
+                      key={project.id}
+                      onClick={() =>
+                        setProjectIds(
+                          selected
+                            ? projectIds.filter((id) => id !== project.id)
+                            : [...projectIds, project.id]
+                        )
+                      }
+                      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+                    >
+                      <Check className={cn("h-3.5 w-3.5 shrink-0 text-indigo-500", selected ? "opacity-100" : "opacity-0")} />
+                      {project.color && (
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: project.color }}
+                        />
+                      )}
+                      <span className="truncate">{project.name}</span>
+                    </button>
+                  );
+                })}
+              </PopoverContent>
+            </Popover>
+          )}
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v)}>
+            <SelectTrigger className="w-full sm:w-[160px]">
+              <div className="flex items-center gap-1.5">
+                <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                <SelectValue placeholder="Sort" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created">Date Created</SelectItem>
+              <SelectItem value="due_date">Due Date</SelectItem>
+              <SelectItem value="priority">Priority</SelectItem>
+              <SelectItem value="title">Title</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Tabs value={viewMode} onValueChange={setViewMode}>
@@ -395,7 +399,7 @@ export default function TasksPage() {
                   <Badge
                     variant="secondary"
                     className={cn(
-                      "text-xs shrink-0",
+                      "text-xs shrink-0 hidden sm:inline-flex",
                       priorityColors[task.priority]
                     )}
                   >
