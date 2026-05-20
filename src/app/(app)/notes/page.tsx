@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   Trash2,
   Pencil,
-  ExternalLink,
   ArrowUpDown,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -23,7 +22,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor, htmlToText } from "@/components/ui/rich-text-editor";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,33 +47,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-// Renders text with URLs auto-linked
-function LinkedText({ text }: { text: string }) {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-  return (
-    <>
-      {parts.map((part, i) =>
-        urlRegex.test(part) ? (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-2 break-all inline-flex items-center gap-0.5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {part}
-            <ExternalLink className="h-3 w-3 shrink-0" />
-          </a>
-        ) : (
-          <span key={i}>{part}</span>
-        )
-      )}
-    </>
-  );
-}
 
 export default function NotesPage() {
   const [search, setSearch] = useState("");
@@ -301,8 +273,8 @@ export default function NotesPage() {
                   </div>
                 </div>
                 {note.content && (
-                  <p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">
-                    {note.content}
+                  <p className="text-sm text-muted-foreground line-clamp-3">
+                    {htmlToText(note.content)}
                   </p>
                 )}
                 <div className="flex items-center justify-between pt-1">
@@ -341,9 +313,10 @@ export default function NotesPage() {
           </DialogHeader>
           <div className="flex-1 overflow-y-auto">
             {viewNote?.content ? (
-              <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                <LinkedText text={viewNote.content} />
-              </p>
+              <div
+                className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: viewNote.content }}
+              />
             ) : (
               <p className="text-sm text-muted-foreground italic">No content.</p>
             )}
@@ -384,13 +357,12 @@ export default function NotesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="note-content">Content</Label>
-              <Textarea
-                id="note-content"
-                placeholder="Write your note..."
+              <Label>Content</Label>
+              <RichTextEditor
                 value={formContent}
-                onChange={(e) => setFormContent(e.target.value)}
-                rows={6}
+                onChange={setFormContent}
+                placeholder="Write your note..."
+                minHeight="160px"
               />
             </div>
             <div className="flex items-center gap-2">
@@ -440,13 +412,12 @@ export default function NotesPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-note-content">Content</Label>
-              <Textarea
-                id="edit-note-content"
-                placeholder="Write your note..."
+              <Label>Content</Label>
+              <RichTextEditor
                 value={formContent}
-                onChange={(e) => setFormContent(e.target.value)}
-                rows={6}
+                onChange={setFormContent}
+                placeholder="Write your note..."
+                minHeight="160px"
               />
             </div>
           </div>

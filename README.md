@@ -13,6 +13,7 @@
 | Auth | Cookie-based sessions (bcrypt) |
 | AI | Google Gemini via Vercel AI SDK |
 | Styling | Tailwind CSS + shadcn/ui |
+| Rich Text | Tiptap |
 | Data Fetching | SWR |
 | Deployment | Railway (Docker, persistent volume) |
 
@@ -136,9 +137,11 @@ GEMINI_API_KEY=your_key_here
 - Responsive grid (1 / 2 / 3 columns)
 - **Pinned notes** highlighted with amber ring border; appear first
 - **Filters:** search by title/content, toggle pinned-only
-- **Card display:** pin indicator, title, content preview (3 lines), creation date
+- **Card display:** pin indicator, title, plain-text content preview (3 lines), creation date
 - **Actions per card:** edit, pin/unpin, delete (via hover menu)
-- **Create / Edit dialog:** title, content (textarea), pin toggle
+- **Rich text editor** (Tiptap) — bold, italic, underline, strikethrough, inline code, H1/H2/H3, bullet list, numbered list, blockquote, divider, links, undo/redo; full keyboard shortcut support (Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Z…)
+- **View dialog** — renders formatted HTML with full typography
+- Content stored as HTML; pin toggle on create
 - AI chatbot can create, list, and delete notes
 
 ---
