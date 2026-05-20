@@ -1,6 +1,6 @@
 # ProFlow — All-in-One Productivity Platform
 
-> A full-stack productivity platform built with Next.js 15 App Router, SQLite, and Google Gemini AI. Manage tasks, projects, time, notes, mental health, and more — all from one place.
+> A full-stack productivity platform built with Next.js 15 App Router, SQLite, and Google Gemini AI. Manage tasks, projects, time, notes, mental health, and more, all from one place.
 
 ---
 
