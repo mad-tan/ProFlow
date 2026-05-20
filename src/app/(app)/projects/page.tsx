@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { usePersistedState } from "@/lib/hooks/use-persisted-state";
 import { cn } from "@/lib/utils";
-import { useProjects } from "@/lib/hooks/use-projects";
+import { useProjects, type ProjectFilters } from "@/lib/hooks/use-projects";
 import type { ProjectStatus } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -81,12 +81,15 @@ export default function ProjectsPage() {
   const [formColor, setFormColor] = useState(PROJECT_COLORS[5]);
   const [submitting, setSubmitting] = useState(false);
 
-  const filters: Record<string, string | undefined> = {};
+  const filters: ProjectFilters = {};
   if (statusFilter !== "all") filters.status = statusFilter;
   if (search) filters.search = search;
+  if (showArchived || statusFilter === "archived") {
+    filters.includeArchived = true;
+  }
 
   const { projects, isLoading, createProject, archiveProject, deleteProject } =
-    useProjects(filters as any);
+    useProjects(filters);
 
   const filteredProjects = useMemo(() => {
     let list = (projects ?? []).filter((p) => {

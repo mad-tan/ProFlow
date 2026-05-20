@@ -7,6 +7,7 @@ import { fetcher, apiPost, apiPut, apiDelete, apiPatch } from "./use-fetch";
 export interface ProjectFilters {
   status?: ProjectStatus;
   search?: string;
+  includeArchived?: boolean;
 }
 
 // ─── Input Types ────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ function buildProjectsUrl(filters?: ProjectFilters): string {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);
   if (filters?.search) params.set("search", filters.search);
+  if (filters?.includeArchived) params.set("includeArchived", "true");
 
   const qs = params.toString();
   return `/api/projects${qs ? `?${qs}` : ""}`;
